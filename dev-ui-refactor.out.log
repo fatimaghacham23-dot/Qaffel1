@@ -1,0 +1,17 @@
+
+> qaffel@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.10.59:3000
+- Environments: .env.local
+✓ Ready in 601ms
+
+ GET / 200 in 1124ms (next.js: 792ms, application-code: 332ms)
+ GET / 200 in 66ms (next.js: 4ms, application-code: 62ms)
+ GET / 200 in 81ms (next.js: 4ms, application-code: 77ms)
+ GET /invoices/new 307 in 147ms (next.js: 29ms, application-code: 118ms)
+ GET /pay/b07b2e8b339448a4b796270da73e4487182750df 200 in 2.1s (next.js: 718ms, application-code: 1379ms)
+ GET /client/5cd8cf0220d967e4ae9bbeb60d54ae7ae9e2cac8f79ad3e6 200 in 2.2s (next.js: 695ms, application-code: 1463ms)
+[?25h

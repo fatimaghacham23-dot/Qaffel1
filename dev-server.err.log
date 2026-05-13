@@ -1,0 +1,163 @@
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+⨯ Error: This proof amount does not cover the remaining balance. Accept it as partial instead.
+    at reviewProofAction (src\app\actions.ts:764:13)
+  762 |
+  763 |     if (!isActuallyPaid) {
+> 764 |       throw new Error("This proof amount does not cover the remaining balance. Accept it ...
+      |             ^
+  765 |     }
+  766 |   }
+  767 | {
+  digest: '2487709127'
+}
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] ./src/components/InteractiveInvoicesTable.tsx:145:9
+the name `displayStatus` is defined multiple times
+  143 |   const displayStatus = getDisplayInvoiceStatus(invoice);
+  144 |   const isQuote = isQuoteDocument(invoice);
+> 145 |   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoi...
+      |         ^^^^^^^^^^^^^
+  146 |   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && ...
+  147 |   const nounTitle = documentNounTitle(invoice);
+  148 |   const invoiceNumber = invoice.invoice_number || nounTitle;
+
+Ecmascript file had an error
+
+Import trace:
+  Server Component:
+    ./src/components/InteractiveInvoicesTable.tsx
+    ./src/app/invoices/page.tsx 
+[browser] ./src/components/InteractiveInvoicesTable.tsx:145:9
+the name `displayStatus` is defined multiple times
+  143 |   const displayStatus = getDisplayInvoiceStatus(invoice);
+  144 |   const isQuote = isQuoteDocument(invoice);
+> 145 |   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoi...
+      |         ^^^^^^^^^^^^^
+  146 |   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && ...
+  147 |   const nounTitle = documentNounTitle(invoice);
+  148 |   const invoiceNumber = invoice.invoice_number || nounTitle;
+
+Ecmascript file had an error
+
+Import trace:
+  Server Component:
+    ./src/components/InteractiveInvoicesTable.tsx
+    ./src/app/invoices/page.tsx 
+[browser] ./src/components/InteractiveInvoicesTable.tsx:145:9
+the name `displayStatus` is defined multiple times
+  143 |   const displayStatus = getDisplayInvoiceStatus(invoice);
+  144 |   const isQuote = isQuoteDocument(invoice);
+> 145 |   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoi...
+      |         ^^^^^^^^^^^^^
+  146 |   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && ...
+  147 |   const nounTitle = documentNounTitle(invoice);
+  148 |   const invoiceNumber = invoice.invoice_number || nounTitle;
+
+Ecmascript file had an error
+
+Import trace:
+  Server Component:
+    ./src/components/InteractiveInvoicesTable.tsx
+    ./src/app/invoices/page.tsx 
+[browser] Uncaught Error: ./src/components/InteractiveInvoicesTable.tsx:145:9
+the name `displayStatus` is defined multiple times
+  143 |   const displayStatus = getDisplayInvoiceStatus(invoice);
+  144 |   const isQuote = isQuoteDocument(invoice);
+> 145 |   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoi...
+      |         ^^^^^^^^^^^^^
+  146 |   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && ...
+  147 |   const nounTitle = documentNounTitle(invoice);
+  148 |   const invoiceNumber = invoice.invoice_number || nounTitle;
+
+Ecmascript file had an error
+
+Import trace:
+  Server Component:
+    ./src/components/InteractiveInvoicesTable.tsx
+    ./src/app/invoices/page.tsx
+
+
+    at <unknown> (Error: ./src/components/InteractiveInvoicesTable.tsx:145:9)
+    at <unknown> (Error: (./src/components/InteractiveInvoicesTable.tsx:145:9)
+[browser] ./src/components/InteractiveInvoicesTable.tsx:145:9
+the name `displayStatus` is defined multiple times
+  143 |   const displayStatus = getDisplayInvoiceStatus(invoice);
+  144 |   const isQuote = isQuoteDocument(invoice);
+> 145 |   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoi...
+      |         ^^^^^^^^^^^^^
+  146 |   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && ...
+  147 |   const nounTitle = documentNounTitle(invoice);
+  148 |   const invoiceNumber = invoice.invoice_number || nounTitle;
+
+Ecmascript file had an error
+
+Import trace:
+  Server Component:
+    ./src/components/InteractiveInvoicesTable.tsx
+    ./src/app/invoices/page.tsx 
+[browser] ./src/components/InteractiveInvoicesTable.tsx:145:9
+the name `displayStatus` is defined multiple times
+  143 |   const displayStatus = getDisplayInvoiceStatus(invoice);
+  144 |   const isQuote = isQuoteDocument(invoice);
+> 145 |   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoi...
+      |         ^^^^^^^^^^^^^
+  146 |   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && ...
+  147 |   const nounTitle = documentNounTitle(invoice);
+  148 |   const invoiceNumber = invoice.invoice_number || nounTitle;
+
+Ecmascript file had an error
+
+Import trace:
+  Server Component:
+    ./src/components/InteractiveInvoicesTable.tsx
+    ./src/app/invoices/page.tsx 
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
