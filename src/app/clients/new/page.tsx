@@ -13,7 +13,7 @@ export default async function NewClientPage({
 
   return (
     <AppShell>
-      <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="mb-6 rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
         <Link className="text-sm font-semibold text-cedar" href="/clients">
           Back to clients
         </Link>

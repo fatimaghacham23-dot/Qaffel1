@@ -100,7 +100,7 @@ export default async function ClientsPage() {
         }
       />
 
-      <div className="mb-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="mb-5 rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-ink">Client data readiness</p>

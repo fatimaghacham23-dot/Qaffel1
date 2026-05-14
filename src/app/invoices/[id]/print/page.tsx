@@ -7,6 +7,9 @@ import { money, shortDate } from "@/lib/format";
 import { getDisplayInvoiceStatus, getRemainingBalance } from "@/lib/status";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PrintButton } from "@/components/PrintButton";
+import { BrandedPublicSurface } from "@/components/brand/BrandedPublicSurface";
+import { BusinessLogoOrMonogram } from "@/components/brand/BusinessLogoOrMonogram";
+import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
 
 export default async function PrintInvoicePage({
   params
@@ -25,7 +28,9 @@ export default async function PrintInvoicePage({
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("business_name, full_name, phone, business_address")
+      .select(
+        "business_name, full_name, phone, business_address, logo_storage_path, brand_color, brand_accent, document_theme, business_tagline, support_email, invoice_footer_note"
+      )
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -36,7 +41,7 @@ export default async function PrintInvoicePage({
       .order("created_at", { ascending: true }),
     supabase
       .from("payment_proofs")
-      .select("status, amount_usd, amount_lbp")
+      .select("status, amount_usd, amount_lbp, receipt_token, confirmed_at")
       .eq("invoice_id", id)
       .eq("status", "accepted")
   ]);
@@ -47,6 +52,19 @@ export default async function PrintInvoicePage({
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const paymentLink = `${appUrl}/pay/${invoice.public_token}`;
+  const businessName = profile?.business_name || profile?.full_name || documentNounTitle(invoice);
+  const logoUrl = await signBrandLogoUrl(supabase, profile?.logo_storage_path ?? null);
+  const brandColor = sanitizeHexColor(profile?.brand_color ?? undefined, "#116466");
+  const brandAccent = profile?.brand_accent ? sanitizeHexColor(profile.brand_accent, brandColor) : null;
+  const docTheme = normalizeDocumentTheme(profile?.document_theme ?? undefined);
+
+  type ProofRow = { receipt_token?: string | null; confirmed_at?: string | null };
+  const proofRows = (proofs || []) as ProofRow[];
+  const latestReceiptToken = proofRows
+    .filter((p) => p.receipt_token)
+    .sort((a, b) => new Date(b.confirmed_at || 0).getTime() - new Date(a.confirmed_at || 0).getTime())[0]?.receipt_token;
+  const receiptLink = latestReceiptToken ? `${appUrl}/receipt/${latestReceiptToken}` : null;
+
   const isQuote = isQuoteDocument(invoice);
   const nounTitle = documentNounTitle(invoice);
   const displayStatus = isQuote ? documentStatus(invoice) : getDisplayInvoiceStatus(invoice);
@@ -55,13 +73,10 @@ export default async function PrintInvoicePage({
   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && (isQuote ? displayStatus === "expired" : invoice.status !== "paid");
 
   return (
-    <div className="min-h-screen bg-white p-4 md:p-8">
+    <BrandedPublicSurface theme={docTheme} brandColor={brandColor} brandAccent={brandAccent} className="print-doc-root public-brand-surface min-h-screen bg-white p-4 md:p-8">
       {/* Print Controls - Hidden during print */}
       <div className="mb-8 flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
-        <Link 
-          href={`/invoices/${id}`}
-          className="text-sm font-semibold text-cedar hover:underline"
-        >
+        <Link href={`/invoices/${id}`} className="text-sm font-semibold hover:underline" style={{ color: "var(--brand-primary, #116466)" }}>
           &larr; Back to {nounTitle.toLowerCase()}
         </Link>
         <PrintButton label="Print / Save as PDF" />
@@ -69,30 +84,36 @@ export default async function PrintInvoicePage({
 
       <div className="mx-auto max-w-4xl">
         {/* Header */}
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-6">
-          <div>
-            <h1 className="text-2xl font-bold text-ink">
-              {profile?.business_name || profile?.full_name || nounTitle}
-            </h1>
-            {profile?.phone && <p className="text-sm text-slate-600">{profile.phone}</p>}
-            {profile?.business_address && (
-              <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{profile.business_address}</p>
-            )}
+        <header className="public-brand-card mb-10 flex flex-wrap items-start justify-between gap-6 border border-slate-200/80 bg-white p-6 shadow-sm">
+          <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
+            <BusinessLogoOrMonogram logoUrl={logoUrl} businessName={businessName} className="h-16 max-w-[200px]" />
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-tight text-ink">{businessName}</h1>
+              {profile?.business_tagline?.trim() ? <p className="mt-1 text-sm text-slate-600">{profile.business_tagline.trim()}</p> : null}
+              {profile?.phone ? <p className="mt-2 text-sm text-slate-600">{profile.phone}</p> : null}
+              {profile?.support_email?.trim() ? (
+                <p className="mt-0.5 text-sm text-slate-600">
+                  <span className="font-semibold text-slate-500">Support · </span>
+                  {profile.support_email.trim()}
+                </p>
+              ) : null}
+              {profile?.business_address ? (
+                <p className="mt-2 text-sm text-slate-600 whitespace-pre-wrap">{profile.business_address}</p>
+              ) : null}
+            </div>
           </div>
           <div className="text-right">
             <h2 className="text-xl font-bold text-ink">{nounTitle.toUpperCase()}</h2>
             <p className="text-sm text-slate-600">#{invoice.invoice_number}</p>
-            <div className="mt-1 flex flex-col items-end gap-1">
-              <div className="flex gap-1">
+            <div className="mt-2 flex flex-col items-end gap-1.5">
+              <div className="flex flex-wrap justify-end gap-1">
                 <StatusBadge status={displayStatus} />
-                {isExpired && <StatusBadge status="rejected" label="EXPIRED" />}
+                {isExpired ? <StatusBadge status="rejected" label="EXPIRED" /> : null}
               </div>
-              {invoice.approval_status !== "not_required" && (
-                <StatusBadge status={invoice.approval_status} />
-              )}
+              {invoice.approval_status !== "not_required" ? <StatusBadge status={invoice.approval_status} /> : null}
             </div>
           </div>
-        </div>
+        </header>
 
         {(invoice.valid_until || invoice.exchange_rate_lbp_per_usd || invoice.rate_note) && (
           <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -195,7 +216,7 @@ export default async function PrintInvoicePage({
                 </td>
               </tr>
             </tbody>
-            <tfoot className="bg-slate-50 border-t border-slate-200 font-bold">
+            <tfoot className="border-t-2 border-slate-300 bg-slate-50/90 font-bold print:bg-white">
               <tr>
                 <td className="px-4 py-3 text-right text-slate-600">{nounTitle} Total</td>
                 <td className="px-4 py-3 text-right text-lg text-ink">
@@ -204,7 +225,7 @@ export default async function PrintInvoicePage({
               </tr>
               {!isQuote && (
                 <>
-                  <tr>
+                  <tr className="border-t border-slate-200">
                     <td className="px-4 py-3 text-right text-slate-600">Total Paid</td>
                     <td className="px-4 py-3 text-right text-lg text-emerald-600">
                       {invoice.currency === "USD" 
@@ -212,10 +233,8 @@ export default async function PrintInvoicePage({
                         : money(balance.totalPaidLbp, "LBP")}
                     </td>
                   </tr>
-                  <tr>
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      Balance Due
-                    </td>
+                  <tr className="border-t border-slate-200">
+                    <td className="px-4 py-3 text-right text-slate-600">Balance Due</td>
                     <td className="px-4 py-3 text-right text-xl text-ink">
                       {invoice.currency === "USD" 
                         ? money(balance.usd, "USD")
@@ -262,13 +281,29 @@ export default async function PrintInvoicePage({
           </div>
         )}
 
+        {profile?.invoice_footer_note?.trim() ? (
+          <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50/80 px-5 py-4 text-sm leading-relaxed text-slate-700 print:bg-white">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Note</p>
+            <p className="mt-2 whitespace-pre-wrap">{profile.invoice_footer_note.trim()}</p>
+          </div>
+        ) : null}
+
         {/* Footer / Payment Link */}
-        <div className="border-t border-slate-100 pt-8 text-center sm:text-left">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">{isQuote ? "Quote Link" : "Payment Link"}</h3>
-          <p className="text-sm text-cedar break-all font-medium">{paymentLink}</p>
-          <p className="mt-4 text-xs text-slate-400 italic">
-            {isQuote ? "This quote is not a payment request yet." : "Thank you for your business."}
+        <div className="border-t border-slate-200 pt-8 text-center sm:text-left">
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">{isQuote ? "Quote link" : "Payment link"}</h3>
+          <p className="break-all text-sm font-semibold" style={{ color: "var(--brand-primary, #116466)" }}>
+            {paymentLink}
           </p>
+          <p className="mt-4 text-xs text-slate-500">{isQuote ? "This quote is not a payment request until accepted." : "Thank you for your business."}</p>
+        </div>
+
+        <div className="mt-8 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 print:border-slate-300 print:bg-white">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Verification & reference</p>
+          <p className="mt-1 break-all font-mono text-[11px] leading-relaxed text-slate-700">
+            Invoice #{invoice.invoice_number} · {paymentLink}
+            {receiptLink ? ` · Receipt ${receiptLink}` : ""}
+          </p>
+          <p className="mt-2 text-[10px] text-slate-500">Retain this page for accounting. Receipt links exist only after a payment is confirmed.</p>
         </div>
       </div>
 
@@ -280,6 +315,6 @@ export default async function PrintInvoicePage({
           @page { margin: 1.5cm; }
         }
       `}} />
-    </div>
+    </BrandedPublicSurface>
   );
 }

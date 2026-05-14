@@ -100,6 +100,7 @@ export type OCInvoiceRow = {
   deposit_amount_usd?: number | string | null;
   deposit_amount_lbp?: number | string | null;
   deposit_note?: string | null;
+  payment_plan?: unknown;
   approval_status?: string | null;
   clients?: { id: string; name: string | null; phone: string | null; email: string | null } | null;
   payment_proofs?: OCInvoiceProof[] | null;

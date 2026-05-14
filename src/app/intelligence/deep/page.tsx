@@ -14,7 +14,7 @@ function ListBlock({
   empty: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+    <div className="q-surface p-4">
       <h2 className="text-sm font-bold text-ink">{title}</h2>
       {items.length === 0 ? (
         <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-center">
@@ -87,7 +87,7 @@ export default async function IntelligenceDeepPage() {
         <ListBlock title="Stale drafts (21d+)" items={op.staleDrafts} empty="No old drafts sitting idle." />
       </div>
 
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
+      <div className="q-surface mt-8 p-4 sm:p-5">
         <h2 className="text-sm font-bold text-ink">Client segments</h2>
         <p className="mt-1 text-xs text-slate-500">Heuristic tags from payment timing, balances, and activity — not credit scores.</p>
         {bundle.clientSegmentation.length === 0 ? (

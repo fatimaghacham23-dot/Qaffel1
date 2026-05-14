@@ -8,6 +8,9 @@ import { didSatisfyDeposit, getDepositRequest, roundCurrencyAmount } from "@/lib
 import { normalizeDocumentType } from "@/lib/documents";
 import { shortDate } from "@/lib/format";
 import type { DocumentType, InvoiceStatus } from "@/lib/types";
+import { parsePaymentPlan } from "@/lib/payment-plan";
+import { sanitizeHexColor, normalizeDocumentTheme } from "@/lib/brand";
+import { assertAllowedRasterImageBytes } from "@/lib/image-bytes";
 import {
   buildAiSummary,
   callGithubGpt4oVision,
@@ -280,11 +283,68 @@ export async function updateProfileAction(formData: FormData) {
     business_name: nullableText(formData, "business_name"),
     phone: nullableText(formData, "phone"),
     business_address: nullableText(formData, "business_address"),
-    default_currency: text(formData, "default_currency") || "USD"
+    default_currency: text(formData, "default_currency") || "USD",
+    business_tagline: nullableText(formData, "business_tagline"),
+    business_website: nullableText(formData, "business_website"),
+    instagram_handle: nullableText(formData, "instagram_handle"),
+    whatsapp_phone: nullableText(formData, "whatsapp_phone"),
+    support_email: nullableText(formData, "support_email"),
+    invoice_footer_note: nullableText(formData, "invoice_footer_note"),
+    business_hours: nullableText(formData, "business_hours"),
+    business_city: nullableText(formData, "business_city"),
+    brand_color: sanitizeHexColor(nullableText(formData, "brand_color"), "#116466"),
+    brand_accent: (() => {
+      const raw = nullableText(formData, "brand_accent");
+      return raw ? sanitizeHexColor(raw, "#116466") : null;
+    })(),
+    document_theme: normalizeDocumentTheme(text(formData, "document_theme"))
   });
 
   await assertOk(error);
   revalidatePath("/dashboard");
+  revalidatePath("/settings/profile");
+}
+
+export async function uploadBusinessLogoAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const file = formData.get("logo");
+  if (!(file instanceof File)) throw new Error("Choose an image file.");
+  if (file.size > 2 * 1024 * 1024) throw new Error("Logo must be 2MB or smaller.");
+  const ab = await file.arrayBuffer();
+  const buf = new Uint8Array(ab);
+  const kind = assertAllowedRasterImageBytes(buf);
+  const ext = kind === "png" ? "png" : kind === "webp" ? "webp" : "jpg";
+  const mime = kind === "png" ? "image/png" : kind === "webp" ? "image/webp" : "image/jpeg";
+  const path = `${user.id}/logo-${Date.now()}.${ext}`;
+
+  const { data: prev } = await supabase.from("profiles").select("logo_storage_path").eq("id", user.id).maybeSingle();
+  const oldPath = prev?.logo_storage_path as string | null | undefined;
+
+  const { error: upErr } = await supabase.storage.from("business-brand").upload(path, buf, {
+    contentType: mime,
+    upsert: false
+  });
+  await assertOk(upErr);
+
+  const { error: dbErr } = await supabase.from("profiles").update({ logo_storage_path: path }).eq("id", user.id);
+  await assertOk(dbErr);
+
+  if (oldPath && oldPath !== path) {
+    await supabase.storage.from("business-brand").remove([oldPath]);
+  }
+  revalidatePath("/settings/profile");
+}
+
+export async function removeBusinessLogoAction() {
+  const { supabase, user } = await requireUser();
+  const { data: prev } = await supabase.from("profiles").select("logo_storage_path").eq("id", user.id).maybeSingle();
+  const oldPath = prev?.logo_storage_path as string | null | undefined;
+  if (oldPath) {
+    await supabase.storage.from("business-brand").remove([oldPath]);
+  }
+  const { error } = await supabase.from("profiles").update({ logo_storage_path: null }).eq("id", user.id);
+  await assertOk(error);
+  revalidatePath("/settings/profile");
 }
 
 export async function createClientAction(formData: FormData) {
@@ -1616,6 +1676,7 @@ export async function recordReminderEventAction(invoiceId: string, stage: string
   });
 
   revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/recoveries");
 }
 
 export async function extendInvoiceValidityAction(formData: FormData) {
@@ -1672,6 +1733,7 @@ export async function extendInvoiceValidityAction(formData: FormData) {
 
   revalidatePath(`/invoices/${id}`);
   revalidatePath(`/pay/${invoice.public_token}`);
+  revalidatePath("/recoveries");
 }
 
 export async function regenerateInvoicePublicTokenAction(formData: FormData) {
@@ -1717,5 +1779,328 @@ export async function regenerateInvoicePublicTokenAction(formData: FormData) {
   }
   revalidatePath(`/pay/${nextToken}`);
 
+  revalidatePath("/recoveries");
   redirect(`/invoices/${id}`);
+}
+
+export async function saveInvoicePaymentPlanAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const id = text(formData, "invoice_id");
+  const raw = text(formData, "plan_json");
+  if (!id || !raw) throw new Error("Missing plan data.");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid plan data.");
+  }
+  const plan = parsePaymentPlan(parsed);
+  if (!plan) throw new Error("Add at least one milestone with an amount.");
+
+  const { data: invoice, error: invErr } = await supabase
+    .from("invoices")
+    .select("id, public_token, currency, amount_usd, amount_lbp, status")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  await assertOk(invErr);
+  if (!invoice) throw new Error("Invoice not found.");
+
+  const { data: proofRows, error: prErr } = await supabase
+    .from("payment_proofs")
+    .select("status, amount_usd, amount_lbp")
+    .eq("invoice_id", id);
+  await assertOk(prErr);
+
+  const remaining = getRemainingBalance(invoice as never, proofRows || []);
+  const primary = (invoice.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
+  const totalPlan = plan.milestones.reduce((sum, m) => {
+    const v = primary === "USD" ? Number(m.amount_usd || 0) : Number(m.amount_lbp || 0);
+    return sum + (Number.isFinite(v) ? v : 0);
+  }, 0);
+  const rem = primary === "USD" ? remaining.usd : remaining.lbp;
+  const tol = primary === "USD" ? 0.05 : 500;
+  if (totalPlan - rem > tol) {
+    throw new Error("Milestone total cannot exceed the remaining balance.");
+  }
+
+  const { error: upErr } = await supabase
+    .from("invoices")
+    .update({ payment_plan: plan as never })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  await assertOk(upErr);
+
+  await createInvoiceEvent({
+    invoiceId: id,
+    userId: user.id,
+    eventType: "payment_plan_saved",
+    message: "Manual payment plan saved (milestones only; not recurring billing).",
+    metadata: { milestone_count: plan.milestones.length }
+  });
+
+  revalidatePath(`/invoices/${id}`);
+  revalidatePath("/recoveries");
+  if (invoice.public_token) revalidatePath(`/pay/${invoice.public_token}`);
+}
+
+export async function clearInvoicePaymentPlanAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const id = text(formData, "invoice_id");
+  if (!id) throw new Error("Missing invoice.");
+
+  const { data: invoice, error: invErr } = await supabase
+    .from("invoices")
+    .select("id, public_token")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  await assertOk(invErr);
+  if (!invoice) throw new Error("Invoice not found.");
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({ payment_plan: null })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  await assertOk(error);
+
+  await createInvoiceEvent({
+    invoiceId: id,
+    userId: user.id,
+    eventType: "payment_plan_cleared",
+    message: "Payment plan cleared.",
+    metadata: {}
+  });
+
+  revalidatePath(`/invoices/${id}`);
+  revalidatePath("/recoveries");
+  if (invoice.public_token) revalidatePath(`/pay/${invoice.public_token}`);
+}
+
+export async function setPaymentPlanMilestoneSatisfiedAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const id = text(formData, "invoice_id");
+  const mid = text(formData, "milestone_id");
+  const satisfied = text(formData, "satisfied") === "1";
+  if (!id || !mid) throw new Error("Missing milestone.");
+
+  const { data: invoice, error: invErr } = await supabase
+    .from("invoices")
+    .select("id, public_token, payment_plan, currency")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  await assertOk(invErr);
+  if (!invoice) throw new Error("Invoice not found.");
+
+  const plan = parsePaymentPlan(invoice.payment_plan);
+  if (!plan) throw new Error("No payment plan on file.");
+
+  const next = {
+    ...plan,
+    milestones: plan.milestones.map((m) =>
+      m.id === mid ? { ...m, satisfied_at: satisfied ? new Date().toISOString() : null } : m
+    )
+  };
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({ payment_plan: next as never })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  await assertOk(error);
+
+  await createInvoiceEvent({
+    invoiceId: id,
+    userId: user.id,
+    eventType: "payment_plan_milestone_updated",
+    message: satisfied ? "Marked installment as received." : "Cleared installment received flag.",
+    metadata: { milestone_id: mid }
+  });
+
+  revalidatePath(`/invoices/${id}`);
+  revalidatePath("/recoveries");
+  if (invoice.public_token) revalidatePath(`/pay/${invoice.public_token}`);
+}
+
+const SHARED_REPORT_TYPES = new Set([
+  "monthly_collections",
+  "overdue_summary",
+  "client_payment_history",
+  "proof_review_summary",
+  "recovery_progress",
+  "payment_summary",
+  "invoice_summary"
+]);
+
+function safeJsonObject(raw: string) {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function createSharedReportAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const reportType = text(formData, "report_type") || "monthly_collections";
+  if (!SHARED_REPORT_TYPES.has(reportType)) {
+    throw new Error("Unsupported report type.");
+  }
+
+  const expiresDays = nullableNumber(formData, "expires_days");
+  const expiresAt =
+    expiresDays && expiresDays > 0
+      ? new Date(Date.now() + Math.min(90, expiresDays) * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+  const title = text(formData, "title") || "Shared business report";
+  const filters = safeJsonObject(text(formData, "filters_json")) as Record<string, unknown>;
+  const from = nullableText(formData, "from");
+  const to = nullableText(formData, "to");
+  const month = nullableText(formData, "month");
+  if (from) filters.from = from;
+  if (to) filters.to = to;
+  if (month) filters.month = month;
+
+  const { error } = await supabase.from("shared_reports").insert({
+    user_id: user.id,
+    token: token(),
+    report_type: reportType,
+    title,
+    description: nullableText(formData, "description"),
+    filters,
+    expires_at: expiresAt
+  });
+
+  await assertOk(error);
+  revalidatePath("/connectivity");
+  revalidatePath("/export");
+}
+
+export async function revokeSharedReportAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const id = text(formData, "share_id");
+  const { error } = await supabase
+    .from("shared_reports")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  await assertOk(error);
+  revalidatePath("/connectivity");
+  revalidatePath("/export");
+}
+
+type ImportRow = Record<string, unknown>;
+
+function parseImportRows(formData: FormData) {
+  const raw = text(formData, "rows_json");
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Import rows are not valid JSON.");
+  }
+  if (!Array.isArray(parsed)) throw new Error("Import rows must be an array.");
+  return parsed.slice(0, 100).filter((row): row is ImportRow => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+}
+
+function importCell(row: ImportRow, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key] ?? row[key.toLowerCase()] ?? row[key.replaceAll(" ", "_")];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function importNumberCell(row: ImportRow, keys: string[]) {
+  const raw = importCell(row, keys).replaceAll(",", "");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function importDateCell(row: ImportRow, keys: string[]) {
+  const raw = importCell(row, keys);
+  if (!raw) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+export async function importConnectivityCsvAction(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const mode = text(formData, "import_mode");
+  const rows = parseImportRows(formData);
+
+  if (!rows.length) {
+    throw new Error("No valid rows to import.");
+  }
+
+  if (mode === "clients") {
+    const { data: existing } = await supabase.from("clients").select("name").eq("user_id", user.id);
+    const existingNames = new Set((existing || []).map((row: { name?: string | null }) => (row.name || "").trim().toLowerCase()).filter(Boolean));
+    const inserts = rows
+      .map((row) => ({
+        user_id: user.id,
+        name: importCell(row, ["name", "client", "client name"]),
+        email: importCell(row, ["email"]) || null,
+        phone: importCell(row, ["phone", "mobile", "whatsapp"]) || null,
+        notes: importCell(row, ["notes", "note"]) || null,
+        client_portal_token: portalToken()
+      }))
+      .filter((row) => row.name && !existingNames.has(row.name.toLowerCase()));
+
+    if (!inserts.length) {
+      throw new Error("No new clients to import. Existing names are skipped to avoid overwrites.");
+    }
+
+    const { error } = await supabase.from("clients").insert(inserts);
+    await assertOk(error);
+    revalidatePath("/clients");
+    revalidatePath("/connectivity");
+    return;
+  }
+
+  if (mode === "invoices") {
+    const { data: clients } = await supabase.from("clients").select("id, name").eq("user_id", user.id);
+    const clientByName = new Map((clients || []).map((client: { id: string; name?: string | null }) => [(client.name || "").trim().toLowerCase(), client.id]));
+    const inserts = rows
+      .map((row) => {
+        const currency = (importCell(row, ["currency"]) || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
+        const documentType = importCell(row, ["document_type", "type"]).toLowerCase() === "quote" ? "quote" : "invoice";
+        const clientName = importCell(row, ["client", "client name", "client_name"]).toLowerCase();
+        return {
+          user_id: user.id,
+          client_id: clientByName.get(clientName) || null,
+          document_type: documentType,
+          invoice_number: invoiceNumber(documentType),
+          title: importCell(row, ["title", "invoice title", "description"]) || "Imported draft",
+          description: importCell(row, ["description", "notes", "note"]) || null,
+          amount_usd: importNumberCell(row, ["amount_usd", "amount usd", "usd"]),
+          amount_lbp: importNumberCell(row, ["amount_lbp", "amount lbp", "lbp"]),
+          currency,
+          due_date: importDateCell(row, ["due_date", "due date"]),
+          status: "draft" as InvoiceStatus,
+          public_token: token(),
+          approval_status: "not_required"
+        };
+      })
+      .filter((row) => row.title && (row.amount_usd || row.amount_lbp));
+
+    if (!inserts.length) {
+      throw new Error("No invoice drafts to import. Add a title and at least one amount column.");
+    }
+
+    const { error } = await supabase.from("invoices").insert(inserts);
+    await assertOk(error);
+    revalidatePath("/invoices");
+    revalidatePath("/connectivity");
+    return;
+  }
+
+  throw new Error("Choose a supported import mode.");
 }

@@ -19,6 +19,7 @@ import { setInvoiceStatusAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PremiumEmptyState } from "@/components/PremiumEmptyState";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import { InvoicePriorityBadges } from "@/components/InvoicePriorityBadges";
 import { documentNounTitle, documentStatus, isQuoteDocument } from "@/lib/documents";
@@ -55,19 +56,6 @@ interface InteractiveInvoicesTableProps {
   invoiceStatuses: InvoiceStatus[];
 }
 
-const statusStyles: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700 ring-slate-200",
-  sent: "bg-indigo-50 text-indigo-700 ring-indigo-200",
-  unpaid: "bg-slate-100 text-slate-700 ring-slate-200",
-  overdue: "bg-red-50 text-red-700 ring-red-200",
-  partial: "bg-sky-50 text-sky-700 ring-sky-200",
-  paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  rejected: "bg-red-50 text-red-700 ring-red-200",
-  quote: "bg-violet-50 text-violet-700 ring-violet-200",
-  approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  expired: "bg-red-50 text-red-700 ring-red-200"
-};
-
 const statusLabels: Record<string, string> = {
   draft: "Draft",
   sent: "Sent",
@@ -100,14 +88,6 @@ function formatAmount(invoice: InvoiceTableInvoice) {
   return money(invoice.amount_usd, "USD");
 }
 
-function InvoiceStatusBadge({ status, label }: { status: string; label?: string }) {
-  return (
-    <Badge variant="secondary" className={cn("ring-1", statusStyles[status] || statusStyles.draft)}>
-      {label || statusLabels[status] || status}
-    </Badge>
-  );
-}
-
 function rowProofs(invoice: InvoiceTableInvoice) {
   return (invoice.payment_proofs || []).map((p) => ({
     status: p.status || "",
@@ -126,7 +106,7 @@ function getRowDisplayStatus(invoice: InvoiceTableInvoice) {
 function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="q-section-label mb-1.5 text-slate-400">{label}</p>
       <div className="text-sm font-semibold text-ink">{value}</div>
     </div>
   );
@@ -186,7 +166,7 @@ function InvoiceRow({
         type="button"
         onClick={onToggle}
         whileHover={{ backgroundColor: "rgba(17, 100, 102, 0.035)" }}
-        className="w-full p-4 text-left transition-colors hover:bg-slate-50 active:bg-slate-100"
+        className="w-full px-4 py-3.5 text-left transition-[background-color,box-shadow] duration-q hover:bg-slate-50/80 active:bg-slate-100 md:py-4"
       >
         <div className="hidden items-center gap-4 md:flex">
           <motion.div
@@ -198,7 +178,10 @@ function InvoiceRow({
           </motion.div>
 
           <div className="flex w-36 shrink-0 flex-col gap-1.5">
-            <InvoiceStatusBadge status={displayStatus} label={friendlyLifecycle} />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <StatusBadge status={displayStatus} label={friendlyLifecycle} />
+              {isExpired ? <StatusBadge status="expired" label="Link expired" size="sm" /> : null}
+            </div>
             <InvoicePriorityBadges flags={priorityFlags} />
           </div>
 
@@ -211,7 +194,7 @@ function InvoiceRow({
             <p className="mt-0.5 truncate font-mono text-xs text-slate-500">{invoiceNumber}</p>
           </div>
 
-          <span className="w-28 shrink-0 text-right text-sm font-bold text-ink">{formatAmount(invoice)}</span>
+          <span className="q-figure w-28 shrink-0 text-right text-sm font-semibold tabular-nums text-ink">{formatAmount(invoice)}</span>
         </div>
 
         <div className="grid gap-3 md:hidden">
@@ -225,12 +208,8 @@ function InvoiceRow({
             </motion.div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <InvoiceStatusBadge status={displayStatus} label={friendlyLifecycle} />
-            {isExpired && (
-              <Badge variant="secondary" className="bg-red-50 text-red-700 ring-1 ring-red-200">
-                Expired
-              </Badge>
-            )}
+            <StatusBadge status={displayStatus} label={friendlyLifecycle} />
+            {isExpired ? <StatusBadge status="expired" label="Expired link" /> : null}
             <InvoicePriorityBadges flags={priorityFlags} className="w-full" />
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -240,7 +219,7 @@ function InvoiceRow({
             </div>
             <div className="text-right">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Amount</p>
-              <p className="font-bold text-ink">{formatAmount(invoice)}</p>
+              <p className="q-figure font-semibold tabular-nums text-ink">{formatAmount(invoice)}</p>
             </div>
           </div>
           <p className="font-mono text-xs text-slate-500">Due {shortDate(invoice.due_date)}</p>
@@ -255,7 +234,7 @@ function InvoiceRow({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22 }}
-            className="overflow-hidden border-t border-slate-200 bg-slate-50/80"
+            className="overflow-hidden border-t border-slate-200/80 bg-slate-50/70"
           >
             <div className="space-y-5 p-4">
               <div>
@@ -268,7 +247,7 @@ function InvoiceRow({
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <DetailItem label="Client" value={clientName} />
-                <DetailItem label="Status" value={<InvoiceStatusBadge status={displayStatus} label={friendlyLifecycle} />} />
+                <DetailItem label="Status" value={<StatusBadge status={displayStatus} label={friendlyLifecycle} />} />
                 <DetailItem
                   label="Amount"
                   value={
@@ -377,7 +356,7 @@ function FilterPanel({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -12 }}
       transition={{ duration: 0.18 }}
-      className="w-full shrink-0 overflow-hidden border-b border-slate-200 bg-white md:w-72 md:border-b-0 md:border-r"
+      className="w-full shrink-0 overflow-hidden border-b border-slate-200/80 bg-white/95 md:w-72 md:border-b-0 md:border-r"
     >
       <div className="flex max-h-[420px] flex-col gap-6 overflow-y-auto p-4 md:max-h-none">
         <div className="flex items-center justify-between gap-3">
@@ -461,13 +440,13 @@ export function InteractiveInvoicesTable({ initialInvoices, invoiceStatuses }: I
   const activeFilters = statusFilter === "all" ? 0 : 1;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
-      <div className="border-b border-slate-200 bg-white p-4 sm:p-5">
-        <div className="space-y-4">
+    <section className="q-table-shell">
+      <div className="border-b border-slate-200/80 bg-white/95 p-5 sm:p-6">
+        <div className="space-y-5">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold tracking-normal text-ink">Documents</h2>
-              <p className="text-sm text-slate-500">
+              <h2 className="q-headline">Documents</h2>
+              <p className="q-body-muted mt-1.5">
                 {filteredInvoices.length.toLocaleString()} of {initialInvoices.length.toLocaleString()} documents
               </p>
             </div>
@@ -526,7 +505,7 @@ export function InteractiveInvoicesTable({ initialInvoices, invoiceStatuses }: I
 
         <div className="min-w-0 flex-1 overflow-x-auto">
           <div className="w-full min-w-[760px]">
-            <div className="hidden border-b border-slate-200 bg-slate-50/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid md:grid-cols-[32px_minmax(140px,160px)_96px_144px_minmax(0,1fr)_112px] md:gap-4">
+            <div className="q-table-head hidden px-4 py-3 md:grid md:grid-cols-[32px_minmax(140px,160px)_96px_144px_minmax(0,1fr)_112px] md:gap-4">
               <span />
               <span>Status</span>
               <span>Due</span>
@@ -535,7 +514,7 @@ export function InteractiveInvoicesTable({ initialInvoices, invoiceStatuses }: I
               <span className="text-right">Amount</span>
             </div>
 
-            <div className="divide-y divide-slate-200">
+            <div className="divide-y divide-slate-100/90">
             <AnimatePresence mode="popLayout">
               {filteredInvoices.length > 0 ? (
                 filteredInvoices.map((invoice, index) => (
@@ -566,8 +545,13 @@ export function InteractiveInvoicesTable({ initialInvoices, invoiceStatuses }: I
                   {initialInvoices.length === 0 ? (
                     <PremiumEmptyState
                       title="No invoices or quotes yet."
-                      description="Create your first invoice or quote to start tracking client documents."
-                      example="Tip: start from an existing client or create one under Clients — then issue INV-001 with your usual rate card."
+                      description="Create the first client-facing document to open the payment workflow."
+                      guidance={[
+                        "Invoices generate a public payment page with your active payment methods.",
+                        "Clients can upload payment proof from that page for manual review.",
+                        "Accepted proofs update the invoice balance and make receipts easier to share."
+                      ]}
+                      example="Tip: add a client first, then issue INV-001 with a clear due date and payment instructions."
                       icon={<FileText className="h-6 w-6" aria-hidden="true" />}
                       action={
                         <Link className="btn btn-primary" href="/invoices/new">

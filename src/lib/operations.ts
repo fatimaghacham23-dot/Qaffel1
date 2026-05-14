@@ -204,14 +204,19 @@ export type ProfileCompleteness = {
   businessName: boolean;
   phone: boolean;
   email: boolean;
-  /** Stored branding — uses business name until a dedicated logo field exists */
+  /** Business name or uploaded logo shown on client-facing surfaces */
   brandIdentity: boolean;
   paymentMethodsActive: boolean;
   businessAddress: boolean;
 };
 
 export function evaluateProfileCompleteness(input: {
-  profile: { business_name?: string | null; phone?: string | null; business_address?: string | null } | null;
+  profile: {
+    business_name?: string | null;
+    phone?: string | null;
+    business_address?: string | null;
+    logo_storage_path?: string | null;
+  } | null;
   userEmail: string | null | undefined;
   hasActivePaymentMethod: boolean;
 }): ProfileCompleteness {
@@ -219,7 +224,7 @@ export function evaluateProfileCompleteness(input: {
     businessName: Boolean(input.profile?.business_name?.trim()),
     phone: Boolean(input.profile?.phone?.trim()),
     email: Boolean(input.userEmail?.trim()),
-    brandIdentity: Boolean(input.profile?.business_name?.trim()),
+    brandIdentity: Boolean(input.profile?.business_name?.trim()) || Boolean(input.profile?.logo_storage_path?.trim()),
     paymentMethodsActive: input.hasActivePaymentMethod,
     businessAddress: Boolean(input.profile?.business_address?.trim())
   };

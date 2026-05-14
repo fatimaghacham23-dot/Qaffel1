@@ -9,7 +9,7 @@ import type { RevenueIntelligence } from "@/lib/intelligence-layer";
 const chartConfig = {
   collected: { label: "Collected (approx. USD)", color: "#116466" },
   billed: { label: "Billed (approx. USD)", color: "#64748b" },
-  overdue: { label: "Overdue remaining (approx. USD)", color: "#d95f43" }
+  overdue: { label: "Revenue at risk (overdue)", color: "#d95f43" }
 } satisfies ChartConfig;
 
 function fmtAxis(v: number) {
@@ -74,9 +74,9 @@ export function IntelligenceRevenueTrendChart({ revenue }: { revenue: RevenueInt
                 />
               }
             />
-            <Area type="monotone" dataKey="collected" stroke="var(--color-collected)" fill="url(#intelCollected)" strokeWidth={2} />
-            <Area type="monotone" dataKey="billed" stroke="var(--color-billed)" fill="url(#intelBilled)" strokeWidth={2} />
-            <Area type="monotone" dataKey="overdue" stroke="var(--color-overdue)" fill="url(#intelOverdue)" strokeWidth={2} />
+            <Area type="monotone" dataKey="collected" stroke="var(--color-collected)" fill="url(#intelCollected)" strokeWidth={2} isAnimationActive animationDuration={700} />
+            <Area type="monotone" dataKey="billed" stroke="var(--color-billed)" fill="url(#intelBilled)" strokeWidth={2} isAnimationActive animationDuration={700} />
+            <Area type="monotone" dataKey="overdue" stroke="var(--color-overdue)" fill="url(#intelOverdue)" strokeWidth={2} isAnimationActive animationDuration={700} />
           </AreaChart>
         </ChartContainer>
       ) : (

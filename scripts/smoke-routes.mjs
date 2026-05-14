@@ -7,8 +7,19 @@ const BASE = (process.env.SMOKE_BASE_URL || "http://localhost:3000").replace(/\/
 
 /** @type {Array<{ path: string, name: string, expectStatus: number[], followRedirects?: boolean, locationIncludes?: string }>} */
 const cases = [
+  { path: "/", name: "home logged-out", expectStatus: [200], followRedirects: true },
   { path: "/login", name: "login", expectStatus: [200], followRedirects: true },
   { path: "/dashboard", name: "dashboard logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/invoices", name: "invoices logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/invoices/new", name: "invoices new logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/clients", name: "clients logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/proofs", name: "proofs logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/settings/payment-methods", name: "payment methods logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/settings/profile", name: "profile logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/export", name: "export logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/reports", name: "reports logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
+  { path: "/reports/csv?m=2026-01", name: "reports csv logged-out", expectStatus: [401] },
+  { path: "/intelligence/deep", name: "intelligence deep logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
   { path: "/invoices", name: "invoices logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
   { path: "/invoices/new", name: "invoices new logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },
   { path: "/clients", name: "clients logged-out", expectStatus: [302, 303, 307, 308], locationIncludes: "/login" },

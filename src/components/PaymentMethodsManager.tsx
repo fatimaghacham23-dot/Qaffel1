@@ -552,8 +552,13 @@ export function PaymentMethodsManager({ methods }: { methods: PaymentMethod[] })
         {sortedMethods.length === 0 ? (
           <PremiumEmptyState
             title="No payment methods yet"
-            description="Add Whish, OMT, cash, bank transfer, or another payment option so clients can see clear instructions."
-            example="Example: Whish with your registered name + mobile, plus ‘upload screenshot after payment’ in instructions."
+            description="Add the payment instructions clients will see before uploading proof."
+            guidance={[
+              "Start with the method your clients already use most often.",
+              "Include receiver name, phone, and a short instruction to upload proof after payment.",
+              "Qaffel publishes instructions only; it does not collect or approve payments automatically."
+            ]}
+            example="Example: Whish with your registered name and mobile number, plus upload screenshot after payment."
             icon={<CheckCircle2 className="h-6 w-6" aria-hidden="true" />}
             action={
               <Button type="button" onClick={() => { setEditingMethodId(null); setIsCreating(true); }}>

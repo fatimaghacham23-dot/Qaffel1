@@ -11,10 +11,11 @@ set SMOKE_BASE_URL=http://localhost:3000
 npm run smoke
 ```
 
-The script checks HTTP status codes (public 404s, login 200, logged-out redirects to `/login`). It does **not** log you in; protected routes are expected to return **307/308** to `/login` when no session cookie is sent.
+The script checks HTTP status codes (public 404s, login 200, logged-out redirects to `/login` with optional `?session=required`). It does **not** log you in; protected **pages** return **302/303/307/308** to `/login` when no session cookie is sent. **`/reports/csv`** returns **401** when logged out (API-style, no HTML redirect).
 
 ## Manual checklist (logged-in)
 
+- [ ] `/` — redirects to dashboard when already signed in; marketing when signed out
 - [ ] `/login` — loads; sign-in works
 - [ ] `/dashboard` — loads after login
 - [ ] `/invoices` — table or empty state
@@ -25,6 +26,7 @@ The script checks HTTP status codes (public 404s, login 200, logged-out redirect
 - [ ] `/settings/profile` — profile form
 - [ ] `/export` — CSV cards + preview
 - [ ] `/reports` — monthly table + CSV links
+- [ ] `/reports/csv?m=YYYY-MM` — CSV download when logged in (401 when logged out)
 - [ ] `/intelligence/deep` — operational lists
 
 ## Public routes (no auth)

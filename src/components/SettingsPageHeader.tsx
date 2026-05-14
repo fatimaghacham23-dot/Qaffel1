@@ -8,10 +8,11 @@ type SettingsPageHeaderProps = {
 
 export function SettingsPageHeader({ title, subtitle, action }: SettingsPageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="mb-7 flex flex-wrap items-start justify-between gap-5 rounded-3xl border border-slate-200/65 bg-white/[0.72] p-6 shadow-card backdrop-blur-md sm:p-7">
       <div className="min-w-0 flex-1">
+        <p className="q-section-label mb-1.5 text-slate-500">Workspace</p>
         <h1 className="page-title">{title}</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
+        <p className="q-subtitle mt-2 max-w-2xl">{subtitle}</p>
       </div>
       {action ? <div className="shrink-0 self-start">{action}</div> : null}
     </div>

@@ -19,11 +19,11 @@ interface DashboardAreaChartProps {
 
 const chartConfig = {
   paidAmount: {
-    label: "Paid amount",
+    label: "Collected in month",
     color: "#116466"
   },
   outstandingAmount: {
-    label: "Outstanding amount",
+    label: "Waiting to be collected",
     color: "#d95f43"
   }
 } satisfies ChartConfig;
@@ -35,26 +35,26 @@ function formatAxis(value: number) {
 
 export function DashboardAreaChart({ data, hasTrendData, paidTotal, outstandingTotal }: DashboardAreaChartProps) {
   return (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft min-h-[360px]">
+    <section className="q-panel min-h-[340px] min-w-0 p-4 sm:p-5">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-cedar">Invoice trend</p>
-          <h2 className="mt-2 text-lg font-bold text-ink">Paid vs outstanding</h2>
+          <p className="q-section-label text-cedar">Invoice trend</p>
+          <h2 className="mt-2 text-lg font-bold text-ink">Collected vs waiting to be collected</h2>
         </div>
         <div className="flex gap-4 text-sm">
           <div>
-            <p className="text-slate-500">Paid</p>
+            <p className="text-slate-500">Collected</p>
             <p className="font-bold text-ink">{money(paidTotal, "USD")}</p>
           </div>
           <div>
-            <p className="text-slate-500">Outstanding</p>
+            <p className="text-slate-500">Waiting to collect</p>
             <p className="font-bold text-ink">{money(outstandingTotal, "USD")}</p>
           </div>
         </div>
       </div>
 
       {hasTrendData ? (
-        <ChartContainer config={chartConfig} className="h-[360px] w-full min-w-0">
+        <ChartContainer config={chartConfig} className="h-[300px] w-full min-w-0 sm:h-[340px]">
           <AreaChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
             <defs>
               <linearGradient id="paidAmountFill" x1="0" x2="0" y1="0" y2="1">
@@ -90,7 +90,7 @@ export function DashboardAreaChart({ data, hasTrendData, paidTotal, outstandingT
                   formatter={(value, name) => (
                     <div className="flex min-w-44 items-center justify-between gap-4">
                       <span className="text-slate-500">
-                        {name === "paidAmount" ? "Paid amount" : "Outstanding amount"}
+                        {name === "paidAmount" ? "Collected in month" : "Waiting to be collected"}
                       </span>
                       <span className="font-mono font-semibold text-ink">{money(Number(value), "USD")}</span>
                     </div>
@@ -105,6 +105,8 @@ export function DashboardAreaChart({ data, hasTrendData, paidTotal, outstandingT
               stroke="var(--color-paidAmount)"
               strokeWidth={2}
               type="monotone"
+              isAnimationActive
+              animationDuration={700}
             />
             <Area
               dataKey="outstandingAmount"
@@ -113,11 +115,13 @@ export function DashboardAreaChart({ data, hasTrendData, paidTotal, outstandingT
               stroke="var(--color-outstandingAmount)"
               strokeWidth={2}
               type="monotone"
+              isAnimationActive
+              animationDuration={700}
             />
           </AreaChart>
         </ChartContainer>
       ) : (
-        <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-center">
+        <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-center sm:min-h-[340px]">
           <div>
             <p className="text-base font-semibold text-ink">Trend data will appear as more invoices are created.</p>
             <p className="mt-2 text-sm text-slate-500">

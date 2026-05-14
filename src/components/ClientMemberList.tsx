@@ -222,7 +222,7 @@ function ClientDesktopRow({
 }) {
   return (
     <>
-      <div className="hidden items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm transition-colors hover:bg-slate-50/80 md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.65fr)_minmax(150px,0.95fr)] lg:gap-4 lg:px-6">
+      <div className="hidden items-center gap-3 border-b border-slate-100/90 px-4 py-3 text-sm transition-colors hover:bg-slate-50/80 md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.65fr)_minmax(150px,0.95fr)] lg:gap-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-cedar/15 bg-cedar/10 text-xs font-bold text-cedar">
             {clientInitials(client.name)}
@@ -259,7 +259,7 @@ function ClientMobileCard({
   onEdit: () => void;
 }) {
   return (
-    <div className="border-b border-slate-100 p-4 last:border-b-0 md:hidden">
+    <div className="border-b border-slate-100 bg-white/95 p-4 last:border-b-0 md:hidden">
       <div className="flex items-start gap-3">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-cedar/15 bg-cedar/10 text-xs font-bold text-cedar">
           {clientInitials(client.name)}
@@ -306,7 +306,7 @@ export function ClientMemberList({ clients }: ClientMemberListProps) {
 
   if (clients.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-soft">
+      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-card">
         <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-cedar/10 text-sm font-bold text-cedar">
           CL
         </div>
@@ -322,9 +322,9 @@ export function ClientMemberList({ clients }: ClientMemberListProps) {
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+    <section className="q-table-shell">
       <div>
-        <div className="hidden gap-3 border-b border-slate-200 bg-slate-50/95 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 md:sticky md:top-0 md:z-10 md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.65fr)_minmax(150px,0.95fr)] lg:gap-4 lg:px-6">
+        <div className="q-table-head hidden gap-3 px-4 py-2 md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.65fr)_minmax(150px,0.95fr)] lg:gap-4 lg:px-6">
           <div>Name</div>
           <div>Phone</div>
           <div>Invoices</div>

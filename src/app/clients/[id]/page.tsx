@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLink, Mail, Phone, UserRound } from "lucide-react";
+import { ExternalLink, FilePlus2, Mail, MessageCircle, Phone, ReceiptText, UserRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PrintButton } from "@/components/PrintButton";
@@ -13,8 +13,18 @@ import { getRemainingBalance, getDisplayInvoiceStatus } from "@/lib/status";
 import { requireUser } from "@/lib/supabase/server";
 import { regenerateClientPortalTokenAction } from "@/app/actions";
 import { ClientIntelligenceCard } from "@/components/ClientIntelligenceCard";
+import { QuickActionGrid, type ProductivityAction } from "@/components/ProductivityQuickActions";
 import { buildClientIntelligence } from "@/lib/intelligence-layer";
 import type { OCInvoiceRow } from "@/lib/operations-center";
+import {
+  buildClientMemoryTimeline,
+  deriveClientContextBullets,
+  deriveRelationshipSignals,
+  groupMemoryTimelineByDay
+} from "@/lib/workspace-memory";
+import { ClientContextRelationshipPanel, ClientMemoryTimeline } from "@/components/workspace/ClientContextTimeline";
+import { ClientWorkspaceNotesPanel } from "@/components/workspace/ClientWorkspaceNotesPanel";
+import { WorkspaceMessageTemplatesCard } from "@/components/workspace/WorkspaceMessageTemplatesCard";
 
 function ClientFlag({ tone, label }: { tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }) {
   const tones = {
@@ -28,6 +38,11 @@ function ClientFlag({ tone, label }: { tone: "good" | "warn" | "danger" | "info"
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tones[tone]}`}>{label}</span>;
 }
 
+function whatsappHref(phone?: string | null) {
+  const clean = (phone || "").replace(/\D/g, "");
+  return clean ? `https://wa.me/${clean}` : null;
+}
+
 export default async function ClientDetailPage({
   params
 }: {
@@ -36,33 +51,52 @@ export default async function ClientDetailPage({
   const { id } = await params;
   const { supabase, user } = await requireUser();
 
-  const [{ data: client }, { data: profile }, { data: clientEvents }] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "*, invoices(*, payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at, confirmed_at, payment_date, method))"
-      )
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("business_name, full_name, phone")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("invoice_events")
-      .select("id, invoice_id, event_type, message, created_at, metadata")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(500)
-  ]);
+  const { data: client, error: clientError } = await supabase
+    .from("clients")
+    .select(
+      "*, invoices(*, payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at, confirmed_at, payment_date, method, voided_at))"
+    )
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-  if (!client) {
+  if (clientError || !client) {
     return notFound();
   }
 
   const documents = client.invoices || [];
+  const invoiceIds = documents.map((d: { id: string }) => d.id);
+
+  const [{ data: profile }, { data: clientEvents }, { data: clientNotes }, { data: invoiceMemNotes }, { data: workspaceTemplates }] =
+    await Promise.all([
+      supabase.from("profiles").select("business_name, full_name, phone").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("invoice_events")
+        .select("id, invoice_id, event_type, message, created_at, metadata")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase
+        .from("client_workspace_notes")
+        .select("id, client_id, category, body, is_pinned, created_at, updated_at")
+        .eq("client_id", id)
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false }),
+      invoiceIds.length
+        ? supabase
+            .from("invoice_workspace_notes")
+            .select("id, invoice_id, category, body, is_pinned, created_at, updated_at")
+            .in("invoice_id", invoiceIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as any[] }),
+      supabase
+        .from("workspace_message_templates")
+        .select("id, category, label, body, is_favorite, use_count, last_used_at, created_at")
+        .eq("user_id", user.id)
+        .order("is_favorite", { ascending: false })
+        .order("last_used_at", { ascending: false })
+        .limit(40)
+    ]);
   const invoices = documents.filter((inv: any) => !isQuoteDocument(inv));
   const quotes = documents.filter((inv: any) => isQuoteDocument(inv));
   const overdueInvoices = invoices.filter((inv: any) => getDisplayInvoiceStatus(inv) === "overdue");
@@ -132,6 +166,7 @@ export default async function ClientDetailPage({
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const portalUrl = client.client_portal_token ? `${baseUrl}/client/${client.client_portal_token}` : null;
+  const clientWhatsAppUrl = whatsappHref(client.phone);
   const acceptedPaymentCount = invoices.reduce(
     (count: number, inv: any) => count + (inv.payment_proofs || []).filter((proof: any) => proof.status === "accepted").length,
     0
@@ -166,6 +201,82 @@ export default async function ClientDetailPage({
           events: eventsForClient as any
         })
       : null;
+  const clientActionCandidates: Array<ProductivityAction | null> = [
+    {
+      label: "Create invoice",
+      description: "Start from this client",
+      href: `/invoices/new?client_id=${client.id}`,
+      icon: FilePlus2,
+      shortcut: "C"
+    },
+    clientWhatsAppUrl
+      ? {
+          label: "WhatsApp",
+          description: "Open client chat",
+          href: clientWhatsAppUrl,
+          icon: MessageCircle,
+          external: true
+        }
+      : null,
+    client.email
+      ? {
+          label: "Email",
+          description: "Open mail composer",
+          href: `mailto:${client.email}`,
+          icon: Mail,
+          external: true
+        }
+      : null,
+    portalUrl
+      ? {
+          label: "Open portal",
+          description: "Client statement link",
+          href: portalUrl,
+          icon: ExternalLink,
+          external: true,
+          tone: "positive"
+        }
+      : null,
+    {
+      label: "Statement",
+      description: "Jump to documents",
+      href: "#document-statement",
+      icon: ReceiptText
+    }
+  ];
+  const clientActions = clientActionCandidates.filter((action): action is ProductivityAction => Boolean(action));
+
+  const memoryInvoices = documents.map((inv: any) => ({
+    id: inv.id,
+    title: inv.title,
+    invoice_number: inv.invoice_number,
+    document_type: inv.document_type,
+    status: inv.status,
+    currency: inv.currency,
+    amount_usd: inv.amount_usd,
+    amount_lbp: inv.amount_lbp,
+    due_date: inv.due_date,
+    created_at: inv.created_at,
+    deposit_enabled: inv.deposit_enabled,
+    payment_plan: inv.payment_plan,
+    payment_proofs: inv.payment_proofs
+  }));
+
+  const timelineItems = buildClientMemoryTimeline({
+    invoices: memoryInvoices as any,
+    events: eventsForClient as any,
+    clientNotes: (clientNotes || []) as any,
+    invoiceNotes: (invoiceMemNotes || []) as any
+  }).slice(0, 120);
+  const timelineGroups = groupMemoryTimelineByDay(timelineItems);
+  const contextBullets = deriveClientContextBullets({
+    invoices: memoryInvoices as any,
+    events: eventsForClient as any
+  });
+  const relationshipSignals = deriveRelationshipSignals({
+    invoices: memoryInvoices as any,
+    events: eventsForClient as any
+  });
 
   return (
     <AppShell>
@@ -175,7 +286,7 @@ export default async function ClientDetailPage({
         </Link>
 
         <div
-          className={`rounded-2xl border p-4 shadow-soft ${
+          className={`rounded-2xl border p-4 shadow-card ${
             clientHealth === "risk"
               ? "border-red-200 bg-red-50"
               : clientHealth === "attention"
@@ -190,7 +301,7 @@ export default async function ClientDetailPage({
           <p className="mt-1 text-sm text-slate-700">{healthCopy}</p>
         </div>
 
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+        <section className="q-panel overflow-hidden">
           <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:p-6">
             <div className="min-w-0">
               <div className="flex items-center gap-3">
@@ -208,14 +319,14 @@ export default async function ClientDetailPage({
                 ))}
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
                   <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <Phone className="h-4 w-4" aria-hidden="true" />
                     Phone
                   </p>
                   <p className="mt-2 break-words text-sm font-semibold text-ink">{client.phone || "Not added"}</p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
                   <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <Mail className="h-4 w-4" aria-hidden="true" />
                     Email
@@ -225,7 +336,7 @@ export default async function ClientDetailPage({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Client actions</p>
               <div className="mt-4 grid gap-2">
                 <Link className="btn btn-primary w-full text-xs" href={`/invoices/new?client_id=${client.id}`}>
@@ -253,14 +364,25 @@ export default async function ClientDetailPage({
           </div>
         </section>
 
+        <QuickActionGrid
+          title="Client quick actions"
+          subtitle="Communication and payment actions stay close to the client context."
+          actions={clientActions}
+          compact
+        />
+
         {clientIntel ? (
           <div className="print:hidden">
             <ClientIntelligenceCard intel={clientIntel} />
           </div>
         ) : null}
 
+        <div className="print:hidden">
+          <ClientContextRelationshipPanel bullets={contextBullets} signals={relationshipSignals} />
+        </div>
+
         {(overdueInvoices.length > 0 || hasBalanceDue) && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-soft">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-amber-900">Balance attention</p>
@@ -351,7 +473,7 @@ export default async function ClientDetailPage({
             )}
           </div>
 
-          <section className="panel print:shadow-none print:border-none print:p-0">
+          <section id="document-statement" className="panel scroll-mt-24 print:border-none print:p-0 print:shadow-none">
             <h2 className="mb-4 text-lg font-bold text-ink print:text-base print:mb-2 print:border-b print:border-slate-200 print:pb-1">Document Statement</h2>
             {documents.length === 0 ? (
               <p className="text-sm text-slate-500 italic">No invoices or quotes for this client.</p>
@@ -367,7 +489,7 @@ export default async function ClientDetailPage({
                   const primaryAmount = currency === "USD" ? inv.amount_usd : inv.amount_lbp;
 
                   return (
-                    <Link key={inv.id} href={`/invoices/${inv.id}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                    <Link key={inv.id} href={`/invoices/${inv.id}`} className="q-mobile-card block">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{nounTitle} #{inv.invoice_number || "-"}</p>
@@ -402,7 +524,7 @@ export default async function ClientDetailPage({
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <tr className="q-table-head">
                       <th className="pb-3 pr-4">Document</th>
                       <th className="pb-3 pr-4">Status</th>
                       <th className="pb-3 pr-4 text-right">Total</th>
@@ -468,9 +590,15 @@ export default async function ClientDetailPage({
               </>
             )}
           </section>
+
+          <div className="print:hidden">
+            <ClientMemoryTimeline groups={timelineGroups} />
+          </div>
         </div>
 
         <aside className="space-y-6 print:hidden">
+          <ClientWorkspaceNotesPanel clientId={client.id} initialNotes={(clientNotes || []) as any} />
+          <WorkspaceMessageTemplatesCard initialTemplates={(workspaceTemplates || []) as any} />
           <section className="panel">
             <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">Contact Details</h2>
             <div className="space-y-4">
@@ -495,7 +623,7 @@ export default async function ClientDetailPage({
 
           {client.notes && (
             <section className="panel">
-              <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-500">Notes</h2>
+              <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-500">Profile notes (legacy)</h2>
               <p className="text-sm text-slate-700 whitespace-pre-wrap">{client.notes}</p>
             </section>
           )}

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { resolveSafeQrImageSrc } from "@/lib/safe-qr-url";
 
-const FALLBACK = "QR unavailable — use phone/account details.";
+const FALLBACK = "QR unavailable - use phone or account details.";
 
 type Props = {
   srcRaw: string | null | undefined;
@@ -28,7 +28,7 @@ export function SafePaymentQrImage({ srcRaw, alt, className }: Props) {
     return <p className="text-xs leading-snug text-slate-600">{FALLBACK}</p>;
   }
 
-  const box = "relative h-32 w-32 overflow-hidden rounded-md border border-slate-200 bg-white";
+  const box = "relative h-44 w-44 max-w-[72vw] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:h-40 sm:w-40";
   const imgClass = `object-contain ${className ?? ""}`.trim();
 
   const onError = () => setPhase("error");
@@ -41,18 +41,13 @@ export function SafePaymentQrImage({ srcRaw, alt, className }: Props) {
   return (
     <div className="space-y-2">
       <div className={box}>
-        {phase === "loading" ? (
-          <div
-            className="pointer-events-none absolute inset-0 z-10 animate-pulse bg-slate-100"
-            aria-hidden
-          />
-        ) : null}
+        {phase === "loading" ? <div className="q-skeleton pointer-events-none absolute inset-0 z-10" aria-hidden /> : null}
         {resolved.kind === "relative" ? (
           <Image
             src={resolved.path}
             alt={alt}
             fill
-            sizes="128px"
+            sizes="160px"
             className={`z-0 ${imgClass}`}
             unoptimized
             onLoad={onLoad}
@@ -75,7 +70,7 @@ export function SafePaymentQrImage({ srcRaw, alt, className }: Props) {
       </div>
       {phase === "loading" ? (
         <p className="text-[10px] text-slate-500" aria-live="polite">
-          Loading QR…
+          Loading QR...
         </p>
       ) : null}
     </div>

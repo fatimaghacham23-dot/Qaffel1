@@ -6,20 +6,22 @@ interface DashboardFinancialCardProps {
   paidThisMonth: string;
   outstanding: string;
   activityData?: { day: string; value: number }[];
+  omitHeroValue?: boolean;
 }
 
-export function DashboardFinancialCard({ paidThisMonth, outstanding, activityData }: DashboardFinancialCardProps) {
+export function DashboardFinancialCard({ paidThisMonth, outstanding, activityData, omitHeroValue }: DashboardFinancialCardProps) {
   return (
     <AnimatedDashboardCard
-      title="Paid this month"
+      title="Collected this month"
       value={paidThisMonth}
-      primaryLabel="Total collected"
+      primaryLabel="Collected this month"
       primaryValue={paidThisMonth}
-      secondaryLabel="Outstanding"
+      secondaryLabel="Waiting to be collected"
       secondaryValue={outstanding}
-      note="Based on your current invoice statuses."
+      note="Based on your current invoice statuses — same math, clearer labels."
       activityData={activityData}
       activityEmptyMessage="Activity appears as invoices and payments are recorded."
+      omitHeroValue={omitHeroValue}
     />
   );
 }

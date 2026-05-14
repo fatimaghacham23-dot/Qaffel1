@@ -15,24 +15,24 @@ interface StatisticsCardProps {
 
 const toneClasses: Record<StatisticsCardTone, { accent: string; icon: string; surface: string }> = {
   cedar: {
-    accent: "bg-cedar",
+    accent: "bg-cedar/90",
     icon: "text-cedar",
-    surface: "bg-cedar/5"
+    surface: "bg-cedar/[0.06]"
   },
   emerald: {
-    accent: "bg-emerald-600",
-    icon: "text-emerald-700",
-    surface: "bg-emerald-50"
+    accent: "bg-emerald-600/85",
+    icon: "text-emerald-800",
+    surface: "bg-emerald-50/80"
   },
   amber: {
-    accent: "bg-amber-500",
-    icon: "text-amber-700",
-    surface: "bg-amber-50"
+    accent: "bg-amber-500/85",
+    icon: "text-amber-900/90",
+    surface: "bg-amber-50/75"
   },
   tomato: {
-    accent: "bg-tomato",
+    accent: "bg-tomato/90",
     icon: "text-tomato",
-    surface: "bg-tomato/5"
+    surface: "bg-tomato/[0.06]"
   }
 };
 
@@ -47,22 +47,22 @@ export function StatisticsCard({
   const classes = toneClasses[tone];
   const content = (
     <>
-      <div className={cn("absolute inset-x-0 top-0 h-1", classes.accent)} />
+      <div className={cn("absolute inset-x-5 top-0 h-px", classes.accent)} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="mt-3 break-words text-2xl font-bold tracking-normal text-ink">{value}</p>
+          <p className="q-section-label">{title}</p>
+          <p className="q-figure mt-3 break-words text-2xl font-semibold tracking-tight text-ink sm:text-[1.65rem]">{value}</p>
         </div>
-        <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl", classes.surface)}>
+        <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/60 shadow-sm", classes.surface)}>
           <Icon className={cn("h-5 w-5", classes.icon)} aria-hidden="true" />
         </span>
       </div>
-      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400">{helperText}</p>
+      <p className="q-caption mt-3">{helperText}</p>
     </>
   );
 
   const className =
-    "group relative block min-h-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-soft transition hover:-translate-y-0.5 hover:border-cedar/20";
+    "group q-surface-hover relative block min-h-[8.5rem] overflow-hidden rounded-3xl border border-slate-200/70 bg-white/95 p-5 shadow-card";
 
   if (href) {
     return (

@@ -1,25 +1,30 @@
+/** Restrained status chips — calm saturation per design-system-rules.md */
 const styles: Record<string, string> = {
-  paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  accepted: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  complete: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  pending: "bg-amber-50 text-amber-700 ring-amber-200",
-  warning: "bg-amber-50 text-amber-700 ring-amber-200",
-  missing: "bg-amber-50 text-amber-700 ring-amber-200",
-  partial: "bg-sky-50 text-sky-700 ring-sky-200",
-  overdue: "bg-red-50 text-red-700 ring-red-200",
-  rejected: "bg-red-50 text-red-700 ring-red-200",
-  danger: "bg-red-50 text-red-700 ring-red-200",
-  voided: "bg-slate-100 text-slate-700 ring-slate-200",
-  neutral: "bg-slate-100 text-slate-700 ring-slate-200",
-  unpaid: "bg-slate-100 text-slate-700 ring-slate-200",
-  sent: "bg-indigo-50 text-indigo-700 ring-indigo-200",
-  draft: "bg-slate-100 text-slate-700 ring-slate-200",
-  quote: "bg-violet-50 text-violet-700 ring-violet-200",
-  expired: "bg-red-50 text-red-700 ring-red-200",
-  not_required: "bg-slate-100 text-slate-700 ring-slate-200",
-  unknown: "bg-slate-100 text-slate-700 ring-slate-200"
+  paid: "bg-emerald-50/90 text-emerald-800/95 ring-emerald-200/70",
+  accepted: "bg-emerald-50/90 text-emerald-800/95 ring-emerald-200/70",
+  approved: "bg-emerald-50/90 text-emerald-800/95 ring-emerald-200/70",
+  active: "bg-emerald-50/90 text-emerald-800/95 ring-emerald-200/70",
+  complete: "bg-emerald-50/90 text-emerald-800/95 ring-emerald-200/70",
+  pending: "bg-amber-50/90 text-amber-900/90 ring-amber-200/60",
+  awaiting_review: "bg-amber-50/90 text-amber-900/90 ring-amber-200/60",
+  warning: "bg-amber-50/90 text-amber-900/90 ring-amber-200/60",
+  missing: "bg-amber-50/90 text-amber-900/90 ring-amber-200/60",
+  expiring: "bg-amber-50/90 text-amber-900/90 ring-amber-200/60",
+  partial: "bg-sky-50/90 text-sky-800/95 ring-sky-200/65",
+  overdue: "bg-rose-50/90 text-rose-900/90 ring-rose-200/60",
+  rejected: "bg-rose-50/90 text-rose-900/90 ring-rose-200/60",
+  danger: "bg-rose-50/90 text-rose-900/90 ring-rose-200/60",
+  recovery_risk: "bg-orange-50/85 text-orange-900/88 ring-orange-200/55",
+  voided: "bg-slate-100/95 text-slate-600 ring-slate-200/70",
+  neutral: "bg-slate-100/95 text-slate-600 ring-slate-200/70",
+  unpaid: "bg-slate-100/95 text-slate-600 ring-slate-200/70",
+  sent: "bg-indigo-50/90 text-indigo-800/95 ring-indigo-200/60",
+  draft: "bg-slate-100/95 text-slate-600 ring-slate-200/70",
+  quote: "bg-violet-50/90 text-violet-800/95 ring-violet-200/60",
+  expired: "bg-rose-50/85 text-rose-900/88 ring-rose-200/55",
+  not_required: "bg-slate-100/95 text-slate-500 ring-slate-200/65",
+  unknown: "bg-slate-100/95 text-slate-500 ring-slate-200/65",
+  deposit_pending: "bg-sky-50/90 text-sky-900/90 ring-sky-200/60"
 };
 
 const labels: Record<string, string> = {
@@ -30,6 +35,7 @@ const labels: Record<string, string> = {
   draft: "Draft",
   sent: "Sent",
   pending: "Pending",
+  awaiting_review: "Awaiting review",
   accepted: "Accepted",
   rejected: "Rejected",
   voided: "Voided",
@@ -43,14 +49,35 @@ const labels: Record<string, string> = {
   danger: "Attention",
   neutral: "Neutral",
   not_required: "Not required",
-  unknown: "Unknown"
+  unknown: "Unknown",
+  expiring: "Expiring soon",
+  recovery_risk: "Recovery risk",
+  deposit_pending: "Deposit pending"
 };
 
-export function StatusBadge({ status, label, className = "" }: { status: string | null | undefined; label?: string; className?: string }) {
+const sizeClasses = {
+  sm: "min-h-7 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-tight ring-1 shadow-sm",
+  md: "min-h-8 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 shadow-sm"
+};
+
+export function StatusBadge({
+  status,
+  label,
+  className = "",
+  size = "md"
+}: {
+  status: string | null | undefined;
+  label?: string;
+  className?: string;
+  size?: "sm" | "md";
+}) {
   const value = (status || "unknown").toLowerCase();
+  const tone = styles[value] || styles.unknown;
+  const sz = sizeClasses[size];
+
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${styles[value] || styles.unknown} ${className}`}>
-      {label || labels[value] || value}
+    <span className={`inline-flex max-w-full shrink-0 items-center justify-center border border-white/50 ${sz} ${tone} ${className}`}>
+      <span className="truncate font-medium">{label || labels[value] || value}</span>
     </span>
   );
 }

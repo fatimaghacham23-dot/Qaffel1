@@ -58,7 +58,7 @@ export function IntelligenceStackedMethodsChart({ data }: { data: StackedMethodM
               }
             />
             {withOther.map((k, i) => (
-              <Bar key={k} dataKey={k} stackId="a" fill={PALETTE[i % PALETTE.length]} radius={[2, 2, 0, 0]} />
+              <Bar key={k} dataKey={k} stackId="a" fill={PALETTE[i % PALETTE.length]} radius={[2, 2, 0, 0]} isAnimationActive animationDuration={650} />
             ))}
           </BarChart>
         </ChartContainer>

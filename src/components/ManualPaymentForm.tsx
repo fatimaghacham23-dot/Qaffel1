@@ -52,7 +52,7 @@ export function ManualPaymentForm({ invoiceId, isPaid }: { invoiceId: string; is
 
   if (isPaid && !showForm) {
     return (
-      <div className="panel bg-emerald-50/50 border-emerald-100 flex items-center justify-between gap-4">
+      <div id="manual-payment" className="panel flex items-center justify-between gap-4 border-emerald-100 bg-emerald-50/50 scroll-mt-24">
         <p className="text-sm font-medium text-emerald-800 italic">
           This invoice is fully paid.
         </p>
@@ -67,7 +67,7 @@ export function ManualPaymentForm({ invoiceId, isPaid }: { invoiceId: string; is
   }
 
   return (
-    <div className="panel">
+    <div id="manual-payment" className="panel scroll-mt-24">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="text-lg font-bold text-ink">Record manual payment</h2>
         {showForm && (

@@ -56,13 +56,18 @@ export default async function InvoicesPage() {
         title="Invoices"
         subtitle="Manage invoices, quotes, payment status, and client links."
         action={
-          <Link className="btn btn-primary w-full sm:w-auto" href="/invoices/new">
-            New document
-          </Link>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
+            <Link className="btn btn-secondary w-full text-xs sm:w-auto" href="/recoveries">
+              Recovery center
+            </Link>
+            <Link className="btn btn-primary w-full sm:w-auto" href="/invoices/new">
+              New document
+            </Link>
+          </div>
         }
       />
 
-      <div className="mb-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="mb-5 rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-ink">Document readiness</p>

@@ -17,33 +17,33 @@ export function DashboardStatsCards({
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatisticsCard
-        title="Total collected"
+        title="Collected (all time)"
         value={totalCollected}
-        helperText="Current total"
+        helperText="Confirmed on invoices"
         icon={WalletCards}
         href="/invoices"
         tone="emerald"
       />
       <StatisticsCard
-        title="Outstanding balance"
+        title="Waiting to be collected"
         value={outstandingBalance}
-        helperText="Current total"
+        helperText="Open invoice balances"
         icon={ReceiptText}
         href="/invoices"
         tone="cedar"
       />
       <StatisticsCard
-        title="Pending proofs"
+        title="Proofs awaiting review"
         value={pendingProofs.toLocaleString()}
-        helperText="Awaiting review"
+        helperText="Money blocked until you confirm"
         icon={FileCheck2}
         href="/proofs"
         tone="amber"
       />
       <StatisticsCard
-        title="Overdue invoices"
+        title="Invoices with money overdue"
         value={overdueInvoices.toLocaleString()}
-        helperText="Needs attention"
+        helperText="Past due date"
         icon={AlertTriangle}
         href="/invoices"
         tone="tomato"

@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { type KeyboardEvent, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ellipsis, FileText, RotateCcw, Search } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Ellipsis, FileText, Keyboard, RotateCcw, Search, XCircle } from "lucide-react";
 import { reviewProofAction, voidPaymentAction } from "@/app/actions";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { Badge } from "@/components/ui/badge";
@@ -14,15 +15,18 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PremiumEmptyState } from "@/components/PremiumEmptyState";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getPendingProofUrgency } from "@/lib/operations";
 import { parseStoredAiReview } from "@/lib/ai-proof-verification";
 import { aiQueueSortKey } from "@/lib/ai-proof-review-ui";
+import { buildDuplicateProofMap } from "@/lib/workflow-assistant";
 import { cn } from "@/lib/utils";
 import { shortDate, money, formatPaymentMethod } from "@/lib/format";
 
 type PaymentProofStatus = "pending" | "accepted" | "rejected" | "voided" | string;
 type ProofStatusFilter = "all" | "pending" | "accepted" | "rejected" | "voided";
+type ReviewFocus = "all" | "aging" | "needs_attention" | "likely_valid" | "duplicates";
 
 export type PaymentProofTableItem = {
   id: string;
@@ -67,26 +71,12 @@ const statusOptions: Array<{ value: ProofStatusFilter; label: string }> = [
   { value: "voided", label: "Voided" }
 ];
 
-function statusBadgeClass(status: string) {
-  if (status === "pending") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (status === "accepted") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "voided") return "bg-slate-100 text-slate-700 border-slate-200";
-  if (status === "rejected") return "bg-red-50 text-red-700 border-red-200";
-  if (status === "paid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "partial") return "bg-sky-50 text-sky-700 border-sky-200";
-  if (status === "overdue") return "bg-red-50 text-red-700 border-red-200";
-  if (status === "sent") return "bg-indigo-50 text-indigo-700 border-indigo-200";
-  return "bg-slate-100 text-slate-700 border-slate-200";
-}
-
-function StatusPill({ status, label }: { status?: string | null; label?: string }) {
-  const value = status || "unknown";
-
-  return (
-    <Badge variant="outline" className={cn("capitalize", statusBadgeClass(value))}>
-      {label || value}
-    </Badge>
-  );
+function proofStatusBadge(status: string | null | undefined) {
+  const s = (status || "").toLowerCase();
+  if (s === "pending") {
+    return <StatusBadge status="awaiting_review" size="sm" />;
+  }
+  return <StatusBadge status={s} size="sm" />;
 }
 
 function ProofUrgencyBadge({ proof }: { proof: PaymentProofTableItem }) {
@@ -135,6 +125,50 @@ function AiQueueTagBadge({ proof }: { proof: PaymentProofTableItem }) {
   );
 }
 
+function storedQueueTag(proof: PaymentProofTableItem) {
+  return parseStoredAiReview(proof.ai_review_json)?.queue_tag || null;
+}
+
+function isAgingPendingProof(proof: PaymentProofTableItem) {
+  return proof.status === "pending" && getPendingProofUrgency(proof.uploaded_at) !== "fresh";
+}
+
+function proofAmountAboveInvoice(proof: PaymentProofTableItem) {
+  const usd = Number(proof.amount_usd || 0);
+  const lbp = Number(proof.amount_lbp || 0);
+  const invUsd = Number(proof.invoices?.amount_usd || 0);
+  const invLbp = Number(proof.invoices?.amount_lbp || 0);
+  return (usd > 0 && invUsd > 0 && usd > invUsd + 0.01) || (lbp > 0 && invLbp > 0 && lbp > invLbp + 1);
+}
+
+function proofNeedsAttention(proof: PaymentProofTableItem, duplicateCount: number) {
+  if (proof.status !== "pending") return false;
+  const tag = storedQueueTag(proof);
+  return duplicateCount > 1 || proofAmountAboveInvoice(proof) || tag === "amount_mismatch" || tag === "unclear_screenshot" || tag === "needs_attention";
+}
+
+function proofLikelyValid(proof: PaymentProofTableItem, duplicateCount: number) {
+  return proof.status === "pending" && duplicateCount <= 1 && storedQueueTag(proof) === "likely_valid" && !proofAmountAboveInvoice(proof);
+}
+
+function DuplicateProofBadge({ count }: { count: number }) {
+  if (count <= 1) return null;
+  return (
+    <Badge variant="outline" className="mt-1 border-amber-300 bg-amber-50 text-[10px] font-semibold text-amber-900">
+      Possible duplicate ({count})
+    </Badge>
+  );
+}
+
+function AmountAttentionBadge({ proof }: { proof: PaymentProofTableItem }) {
+  if (!proofAmountAboveInvoice(proof)) return null;
+  return (
+    <Badge variant="outline" className="mt-1 border-red-300 bg-red-50 text-[10px] font-semibold text-red-900">
+      Amount above invoice
+    </Badge>
+  );
+}
+
 function proofAmount(proof: PaymentProofTableItem) {
   const parts = [];
   if (proof.amount_usd) parts.push(money(proof.amount_usd, "USD"));
@@ -160,6 +194,21 @@ function proofSearchText(proof: PaymentProofTableItem) {
 
 function isPdfProof(url: string) {
   return url.toLowerCase().includes(".pdf");
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
+}
+
+function QueueKbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-bold text-slate-500">
+      {children}
+    </kbd>
+  );
 }
 
 function ProofPreview({ proof }: { proof: PaymentProofTableItem }) {
@@ -339,18 +388,22 @@ function ProofActions({ proof }: { proof: PaymentProofTableItem }) {
 
 function ProofMobileCard({
   proof,
+  active,
   selected,
+  duplicateCount,
   onSelectedChange
 }: {
   proof: PaymentProofTableItem;
+  active: boolean;
   selected: boolean;
+  duplicateCount: number;
   onSelectedChange: (checked: boolean) => void;
 }) {
   const invoiceHref = proof.invoices?.id ? `/invoices/${proof.invoices.id}` : "#";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   return (
-    <article className={cn("rounded-2xl border border-slate-200 bg-white p-4 shadow-soft", selected && "border-cedar/40 bg-cedar/5")}>
+    <article className={cn("q-mobile-card", selected && "border-cedar/40 bg-cedar/5", active && "outline outline-2 outline-cedar/25")}>
       <div className="flex items-start gap-3">
         <Checkbox
           aria-label={`Select proof ${proof.id}`}
@@ -369,21 +422,23 @@ function ProofMobileCard({
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Amount</p>
           <p className="mt-1 text-sm font-bold text-ink">{proofAmount(proof)}</p>
           {proof.payment_date ? <p className="mt-1 text-xs text-slate-500">Paid {shortDate(proof.payment_date)}</p> : null}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</p>
           <div className="mt-1">
-            <StatusPill status={proof.status} />
+            {proofStatusBadge(proof.status)}
             <ProofUrgencyBadge proof={proof} />
             <AiQueueTagBadge proof={proof} />
+            <DuplicateProofBadge count={duplicateCount} />
+            <AmountAttentionBadge proof={proof} />
             <ProofStatusMessage proof={proof} />
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Method</p>
           <p className="mt-1 text-sm font-semibold text-ink">{formatPaymentMethod(proof.method) || "-"}</p>
           {isWhishOrOmtMethod(proof.method) && (
@@ -396,7 +451,7 @@ function ProofMobileCard({
             </ul>
           )}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Uploaded</p>
           <p className="mt-1 text-sm font-semibold text-ink">{shortDate(proof.uploaded_at)}</p>
         </div>
@@ -419,9 +474,14 @@ function ProofMobileCard({
 }
 
 export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
+  const router = useRouter();
+  const queueRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProofStatusFilter>("all");
+  const [reviewFocus, setReviewFocus] = useState<ReviewFocus>("all");
   const [selectedProofIds, setSelectedProofIds] = useState<string[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isQuickReviewPending, startQuickReviewTransition] = useTransition();
 
   const counts = useMemo(() => {
     return initialProofs.reduce(
@@ -435,13 +495,36 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
     );
   }, [initialProofs]);
 
+  const duplicateProofCounts = useMemo(() => buildDuplicateProofMap(initialProofs), [initialProofs]);
+
+  const reviewGroups = useMemo(() => {
+    return initialProofs.reduce(
+      (acc, proof) => {
+        const duplicateCount = duplicateProofCounts.get(proof.id) || 0;
+        if (isAgingPendingProof(proof)) acc.aging += 1;
+        if (proofNeedsAttention(proof, duplicateCount)) acc.needsAttention += 1;
+        if (proofLikelyValid(proof, duplicateCount)) acc.likelyValid += 1;
+        if (duplicateCount > 1 && proof.status === "pending") acc.duplicates += 1;
+        return acc;
+      },
+      { aging: 0, needsAttention: 0, likelyValid: 0, duplicates: 0 }
+    );
+  }, [duplicateProofCounts, initialProofs]);
+
   const filteredProofs = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
     const filtered = initialProofs.filter((proof) => {
+      const duplicateCount = duplicateProofCounts.get(proof.id) || 0;
       const matchesStatus = statusFilter === "all" || proof.status === statusFilter;
       const matchesSearch = query.length === 0 || proofSearchText(proof).includes(query);
-      return matchesStatus && matchesSearch;
+      const matchesFocus =
+        reviewFocus === "all" ||
+        (reviewFocus === "aging" && isAgingPendingProof(proof)) ||
+        (reviewFocus === "needs_attention" && proofNeedsAttention(proof, duplicateCount)) ||
+        (reviewFocus === "likely_valid" && proofLikelyValid(proof, duplicateCount)) ||
+        (reviewFocus === "duplicates" && duplicateCount > 1 && proof.status === "pending");
+      return matchesStatus && matchesSearch && matchesFocus;
     });
 
     return [...filtered].sort((a, b) => {
@@ -449,16 +532,27 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
       const pr = pendingRank(a) - pendingRank(b);
       if (pr !== 0) return pr;
       if (a.status === "pending" && b.status === "pending") {
+        const reviewRank = (p: PaymentProofTableItem) => {
+          const duplicateCount = duplicateProofCounts.get(p.id) || 0;
+          if (proofNeedsAttention(p, duplicateCount)) return 0;
+          if (isAgingPendingProof(p)) return 1;
+          if (proofLikelyValid(p, duplicateCount)) return 2;
+          return 3;
+        };
+        const rr = reviewRank(a) - reviewRank(b);
+        if (rr !== 0) return rr;
         const d = aiQueueSortKey(a) - aiQueueSortKey(b);
         if (d !== 0) return d;
         return new Date(a.uploaded_at || 0).getTime() - new Date(b.uploaded_at || 0).getTime();
       }
       return new Date(b.uploaded_at || 0).getTime() - new Date(a.uploaded_at || 0).getTime();
     });
-  }, [initialProofs, searchQuery, statusFilter]);
+  }, [duplicateProofCounts, initialProofs, reviewFocus, searchQuery, statusFilter]);
 
   const visibleIds = filteredProofs.map((proof) => proof.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProofIds.includes(id));
+  const safeActiveIndex = Math.min(activeIndex, Math.max(0, filteredProofs.length - 1));
+  const activeProof = filteredProofs[safeActiveIndex] || null;
 
   const toggleSelectAll = (checked: boolean) => {
     setSelectedProofIds((current) =>
@@ -472,8 +566,112 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
     );
   };
 
+  const moveActiveProof = (direction: 1 | -1) => {
+    setActiveIndex((current) => {
+      if (filteredProofs.length === 0) return 0;
+      return Math.min(filteredProofs.length - 1, Math.max(0, current + direction));
+    });
+  };
+
+  const quickReviewActiveProof = (proofStatus: "accepted" | "rejected", invoiceStatus?: string) => {
+    if (!activeProof || activeProof.status !== "pending") {
+      toast.message("Select a pending proof first.");
+      return;
+    }
+
+    const invoiceId = activeProof.invoices?.id || activeProof.invoice_id || "";
+    if (!invoiceId) {
+      toast.error("This proof is missing an invoice reference.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      proofStatus === "accepted"
+        ? "Accept this proof as full payment? You remain responsible for manual verification."
+        : "Reject this proof? You remain responsible for manual verification."
+    );
+    if (!confirmed) return;
+
+    const formData = new FormData();
+    formData.append("proof_id", activeProof.id);
+    formData.append("invoice_id", invoiceId);
+    formData.append("proof_status", proofStatus);
+    formData.append("invoice_status", invoiceStatus ?? (proofStatus === "accepted" ? "paid" : activeProof.invoices?.status || "unpaid"));
+
+    startQuickReviewTransition(async () => {
+      try {
+        await reviewProofAction(formData);
+        toast.success(proofStatus === "accepted" ? "Payment proof accepted." : "Payment proof rejected.");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to update proof status.");
+      }
+    });
+  };
+
+  const handleQueueKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (
+      event.target !== event.currentTarget &&
+      event.target instanceof HTMLElement &&
+      event.target.closest("button,a,[role='button']")
+    ) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    if (key === "arrowdown" || key === "j") {
+      event.preventDefault();
+      moveActiveProof(1);
+      return;
+    }
+
+    if (key === "arrowup" || key === "k") {
+      event.preventDefault();
+      moveActiveProof(-1);
+      return;
+    }
+
+    if (key === "a") {
+      event.preventDefault();
+      quickReviewActiveProof("accepted", "paid");
+      return;
+    }
+
+    if (key === "x") {
+      event.preventDefault();
+      quickReviewActiveProof("rejected");
+      return;
+    }
+
+    if (key === "enter" && activeProof?.invoices?.id) {
+      event.preventDefault();
+      router.push(`/invoices/${activeProof.invoices.id}#proofs-review`);
+    }
+  };
+
+  const focusOptions: Array<{ id: ReviewFocus; label: string; count: number; detail: string; tone: string }> = [
+    { id: "all", label: "All proofs", count: initialProofs.length, detail: "Full audit list", tone: "border-slate-200 bg-white" },
+    { id: "aging", label: "Aging review", count: reviewGroups.aging, detail: "Pending over 24h", tone: "border-amber-200 bg-amber-50" },
+    { id: "needs_attention", label: "Needs attention", count: reviewGroups.needsAttention, detail: "Mismatch, unclear, duplicate, or over amount", tone: "border-red-200 bg-red-50" },
+    { id: "likely_valid", label: "Likely valid", count: reviewGroups.likelyValid, detail: "Stored advisory tag and no duplicate", tone: "border-emerald-200 bg-emerald-50" },
+    { id: "duplicates", label: "Duplicates", count: reviewGroups.duplicates, detail: "Same date, method, and amount", tone: "border-sky-200 bg-sky-50" }
+  ];
+
+  const applyReviewFocus = (focus: ReviewFocus) => {
+    setReviewFocus(focus);
+    if (focus !== "all") setStatusFilter("pending");
+  };
+
   return (
-    <div className="min-w-0 w-full">
+    <div
+      ref={queueRef}
+      aria-label="Payment proof review queue"
+      className="min-w-0 w-full rounded-3xl focus:outline-none focus:ring-4 focus:ring-cedar/10"
+      onKeyDown={handleQueueKeyDown}
+      onMouseDown={() => queueRef.current?.focus()}
+      tabIndex={0}
+    >
       <div className="mb-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_210px]">
           <div className="relative">
@@ -512,14 +710,115 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
         </div>
       </div>
 
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+      {initialProofs.length > 0 ? (
+        <div className="mb-4 rounded-3xl border border-slate-200/80 bg-white/90 p-3 shadow-soft sm:p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-bold text-ink">Review assistant</p>
+              <p className="mt-0.5 text-xs text-slate-500">Grouped by real proof data. Final approval stays manual.</p>
+            </div>
+            {reviewFocus !== "all" ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => applyReviewFocus("all")}>
+                Clear focus
+              </Button>
+            ) : null}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {focusOptions.map((option) => {
+              const selected = reviewFocus === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => applyReviewFocus(option.id)}
+                  className={cn(
+                    "touch-manipulation rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-card",
+                    option.tone,
+                    selected && "ring-2 ring-cedar/25"
+                  )}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-ink">{option.label}</span>
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold text-slate-600">{option.count}</span>
+                  </span>
+                  <span className="mt-1 block text-[10px] leading-relaxed text-slate-600">{option.detail}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {filteredProofs.length > 0 ? (
+        <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-soft sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500">
+              <Keyboard className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-ink">Proof queue shortcuts</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                Active {safeActiveIndex + 1} of {filteredProofs.length}: {activeProof?.invoices?.invoice_number || activeProof?.invoices?.title || "Proof"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
+                <QueueKbd>Up</QueueKbd>
+                <QueueKbd>Down</QueueKbd>
+                <span>navigate</span>
+                <QueueKbd>A</QueueKbd>
+                <span>accept</span>
+                <QueueKbd>X</QueueKbd>
+                <span>reject</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button aria-label="Previous proof" onClick={() => moveActiveProof(-1)} size="sm" variant="outline">
+              <ArrowUp className="h-4 w-4" aria-hidden="true" />
+              Previous
+            </Button>
+            <Button aria-label="Next proof" onClick={() => moveActiveProof(1)} size="sm" variant="outline">
+              <ArrowDown className="h-4 w-4" aria-hidden="true" />
+              Next
+            </Button>
+            <Button
+              aria-keyshortcuts="A"
+              disabled={!activeProof || activeProof.status !== "pending" || isQuickReviewPending}
+              onClick={() => quickReviewActiveProof("accepted", "paid")}
+              size="sm"
+              variant="outline"
+            >
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+              Accept full
+            </Button>
+            <Button
+              aria-keyshortcuts="X"
+              className="text-red-700 hover:text-red-800"
+              disabled={!activeProof || activeProof.status !== "pending" || isQuickReviewPending}
+              onClick={() => quickReviewActiveProof("rejected")}
+              size="sm"
+              variant="outline"
+            >
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+              Reject
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <section className="q-table-shell">
         <div className="grid gap-3 bg-slate-50/60 p-3 lg:hidden">
           {filteredProofs.length === 0 ? (
             initialProofs.length === 0 ? (
               <PremiumEmptyState
                 title="No payment proofs yet."
-                description="When clients upload Whish, OMT, or bank screenshots from the public invoice page, they appear here for your review."
-                example="Share your /pay/… link after publishing an invoice — proofs queue automatically."
+                description="Proofs appear here after a client uploads a screenshot or receipt from a public invoice page."
+                guidance={[
+                  "Share an invoice public page only after payment methods are clear.",
+                  "Clients upload proof there; Qaffel queues it without approving it.",
+                  "Review amount, date, receiver details, and readability before accepting."
+                ]}
+                example="Proofs are never auto-accepted. You stay in control of reconciliation."
                 action={
                   <Link className="btn btn-primary text-xs" href="/invoices">
                     Go to invoices
@@ -543,7 +842,9 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
               <ProofMobileCard
                 key={proof.id}
                 proof={proof}
+                active={activeProof?.id === proof.id}
                 selected={selectedProofIds.includes(proof.id)}
+                duplicateCount={duplicateProofCounts.get(proof.id) || 0}
                 onSelectedChange={(checked) => toggleSelected(proof.id, checked)}
               />
             ))
@@ -552,7 +853,7 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
 
         <div className="hidden w-full min-w-0 lg:block">
           <Table className="w-full table-auto border-separate border-spacing-0 max-lg:min-w-[760px]">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+            <TableHeader className="q-table-head">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-9 px-3">
                   <Checkbox
@@ -579,8 +880,13 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
                     {initialProofs.length === 0 ? (
                       <PremiumEmptyState
                         title="No payment proofs yet."
-                        description="When clients upload Whish, OMT, or bank screenshots from the public invoice page, they appear here for your review."
-                        example="Proofs are never auto-accepted — you stay in control of reconciliation."
+                        description="Proofs appear here after a client uploads a screenshot or receipt from a public invoice page."
+                        guidance={[
+                          "Share an invoice public page only after payment methods are clear.",
+                          "Clients upload proof there; Qaffel queues it without approving it.",
+                          "Review amount, date, receiver details, and readability before accepting."
+                        ]}
+                        example="Proofs are never auto-accepted. You stay in control of reconciliation."
                         action={
                           <Link className="btn btn-primary text-xs" href="/invoices">
                             Go to invoices
@@ -604,9 +910,11 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
                 filteredProofs.map((proof) => {
                   const invoiceHref = proof.invoices?.id ? `/invoices/${proof.invoices.id}` : "#";
                   const selected = selectedProofIds.includes(proof.id);
+                  const active = activeProof?.id === proof.id;
+                  const duplicateCount = duplicateProofCounts.get(proof.id) || 0;
 
                   return (
-                    <TableRow key={proof.id} className={cn(selected && "bg-cedar/5")}>
+                    <TableRow key={proof.id} className={cn(selected && "bg-cedar/5", active && "bg-cedar/[0.07] outline outline-2 outline-cedar/20 outline-offset-[-2px]")}>
                       <TableCell className="px-3">
                         <Checkbox
                           aria-label={`Select proof ${proof.id}`}
@@ -646,14 +954,16 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          <StatusPill status={proof.status} />
+                          {proofStatusBadge(proof.status)}
                           <ProofUrgencyBadge proof={proof} />
                           <AiQueueTagBadge proof={proof} />
+                          <DuplicateProofBadge count={duplicateCount} />
+                          <AmountAttentionBadge proof={proof} />
                         </div>
                         <ProofStatusMessage proof={proof} />
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        <StatusPill status={proof.invoices?.status || "unknown"} />
+                        <StatusBadge status={proof.invoices?.status || "unknown"} size="sm" />
                       </TableCell>
                       <TableCell>
                         <span className="block truncate text-sm text-slate-600">{shortDate(proof.uploaded_at)}</span>

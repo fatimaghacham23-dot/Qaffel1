@@ -12,34 +12,34 @@ export function ClientIntelligenceCard({ intel }: { intel: ClientIntelligence })
         : Minus;
 
   return (
-    <section className="panel border-sky-100 bg-gradient-to-br from-sky-50/80 to-white">
+    <section className="panel border-sky-100 bg-sky-50/70">
       <h2 className="text-lg font-bold text-ink">Client intelligence</h2>
       <p className="mt-1 text-xs text-slate-600">Computed from this client&apos;s invoices and proofs only.</p>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
           <dt className="text-[10px] font-bold uppercase text-slate-500">Lifetime billed</dt>
           <dd className="mt-1 text-lg font-bold text-ink">{money(intel.lifetimeBilledPrimary, intel.primaryCurrency)}</dd>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
           <dt className="text-[10px] font-bold uppercase text-slate-500">Lifetime paid (accepted)</dt>
           <dd className="mt-1 text-lg font-bold text-ink">{money(intel.lifetimePaidPrimary, intel.primaryCurrency)}</dd>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
           <dt className="text-[10px] font-bold uppercase text-slate-500">Avg payment speed vs due</dt>
           <dd className="mt-1 font-semibold text-ink">
             {safeDays(intel.averagePaymentSpeedDays, 1)}
           </dd>
           <p className="mt-1 text-[10px] text-slate-500">Negative = before due date</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
           <dt className="text-[10px] font-bold uppercase text-slate-500">Overdue invoices now</dt>
           <dd className="mt-1 text-lg font-bold text-ink">{intel.overdueInvoiceCount}</dd>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
           <dt className="text-[10px] font-bold uppercase text-slate-500">Preferred method</dt>
           <dd className="mt-1 font-semibold text-ink">{intel.preferredMethod ?? "—"}</dd>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
           <dt className="text-[10px] font-bold uppercase text-slate-500">Last interaction</dt>
           <dd className="mt-1 font-semibold text-ink">
             {intel.lastInteractionAt ? shortDate(intel.lastInteractionAt) : "—"}
@@ -49,7 +49,7 @@ export function ClientIntelligenceCard({ intel }: { intel: ClientIntelligence })
           ) : null}
         </div>
       </dl>
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white/80 p-3">
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white/[0.85] p-3">
         <div>
           <p className="text-[10px] font-bold uppercase text-slate-500">Reliability score</p>
           <p className="text-2xl font-black text-ink">{intel.reliabilityScore}</p>

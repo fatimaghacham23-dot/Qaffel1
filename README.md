@@ -45,7 +45,7 @@ With the dev server running:
 npm run smoke
 ```
 
-Uses `SMOKE_BASE_URL` (default `http://localhost:3000`). See **`docs/PRODUCTION_SMOKE.md`** for the manual checklist and what the script asserts.
+Uses `SMOKE_BASE_URL` (default `http://localhost:3000`). Covers `/`, `/login`, workspace URLs (expect redirect to `/login` when logged out), **`/reports/csv?m=…`** (401 when logged out), and invalid public tokens (404). See **`docs/PRODUCTION_SMOKE.md`** for the manual checklist and what the script asserts.
 
 **Auth:** Workspace routes use `requireUser()` → redirect to `/login?session=required` when logged out.
 

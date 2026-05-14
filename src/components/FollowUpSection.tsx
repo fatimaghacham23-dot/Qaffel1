@@ -7,6 +7,9 @@ import { money, shortDate } from "@/lib/format";
 import { getDepositRequest, roundCurrencyAmount } from "@/lib/deposit";
 import { getDisplayInvoiceStatus } from "@/lib/status";
 import { recordReminderEventAction } from "@/app/actions";
+import { RecoveryTemplatePicker } from "@/components/RecoveryTemplatePicker";
+import { buildRecoveryTemplateCtx } from "@/lib/recovery-templates";
+import { buildReminderAssistance, type ReminderAssistItem } from "@/lib/workflow-assistant";
 
 interface FollowUpSectionProps {
   invoice: any;
@@ -22,13 +25,24 @@ interface FollowUpSectionProps {
     created_at: string;
     metadata: any;
   } | null;
+  events?: any[];
+  proofs?: any[];
+}
+
+function reminderAssistTone(item: ReminderAssistItem) {
+  if (item.tone === "attention") return "border-amber-200 bg-amber-50 text-amber-950";
+  if (item.tone === "good") return "border-emerald-200 bg-emerald-50 text-emerald-950";
+  if (item.tone === "wait") return "border-slate-200 bg-slate-50 text-slate-800";
+  return "border-sky-200 bg-sky-50 text-sky-950";
 }
 
 export function FollowUpSection({ 
   invoice, 
   client, 
   remainingBalance,
-  lastReminder 
+  lastReminder,
+  events = [],
+  proofs = []
 }: FollowUpSectionProps) {
   const [isRecording, setIsRecording] = useState(false);
 
@@ -108,6 +122,11 @@ export function FollowUpSection({
     }
   }, [stage, client, invoice, remainingBalance, publicUrl, depositRequest]);
 
+  const reminderAssistance = useMemo(
+    () => buildReminderAssistance({ invoice, proofs, events }),
+    [invoice, proofs, events]
+  );
+
   const handleAction = async (type: "copy" | "whatsapp") => {
     setIsRecording(true);
     try {
@@ -136,8 +155,8 @@ export function FollowUpSection({
     <section className="panel mt-6" id="follow-up">
       <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
-          <h2 className="text-lg font-bold text-ink">Smart Follow-up</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Generate and send professional reminders.</p>
+          <h2 className="text-lg font-bold text-ink">Follow-up</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Generate reminder copy and open WhatsApp when you choose — nothing sends automatically.</p>
         </div>
         <div className="flex flex-col items-end">
           <span className="inline-flex items-center rounded-full bg-cedar/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cedar">
@@ -152,6 +171,18 @@ export function FollowUpSection({
       </div>
 
       <div className="mt-4">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reminder assistance</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {reminderAssistance.map((item) => (
+              <div key={item.id} className={`rounded-lg border px-3 py-2 text-xs ${reminderAssistTone(item)}`}>
+                <p className="font-bold">{item.label}</p>
+                <p className="mt-1 leading-relaxed opacity-90">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="relative rounded-xl border border-slate-200 bg-slate-50/50 p-4">
           <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{message}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -195,6 +226,22 @@ export function FollowUpSection({
           </div>
         </div>
       </div>
+
+      {(displayStatus === "overdue" || displayStatus === "partial") && (
+        <RecoveryTemplatePicker
+          invoiceId={invoice.id}
+          followUpStage={stage}
+          clientPhone={client?.phone}
+          ctx={buildRecoveryTemplateCtx({
+            clientName: client?.name,
+            invoiceNumber: invoice.invoice_number,
+            title: invoice.title,
+            remainingPrimary: remainingBalance.primaryBalance,
+            primaryCurrency: (remainingBalance.primaryCurrency || "USD") as "USD" | "LBP",
+            publicToken: invoice.public_token
+          })}
+        />
+      )}
     </section>
   );
 }

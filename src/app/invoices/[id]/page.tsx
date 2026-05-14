@@ -1,8 +1,13 @@
 import Link from "next/link";
 import {
+  CircleDollarSign,
+  Copy,
   ExternalLink,
+  FileCheck2,
   Link2,
-  ReceiptText
+  MessageCircle,
+  ReceiptText,
+  RefreshCw
 } from "lucide-react";
 import { 
   convertQuoteToInvoiceAction,
@@ -22,6 +27,8 @@ import { ExtendInvoiceValidityForm } from "@/components/ExtendInvoiceValidityFor
 import { InvoiceDepositFields } from "@/components/InvoiceDepositFields";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { DeleteInvoiceButton } from "@/components/DeleteInvoiceButton";
+import { QuickActionGrid, type ProductivityAction } from "@/components/ProductivityQuickActions";
+import { SuggestedNextActionsCard } from "@/components/SuggestedNextActionsCard";
 import { documentNoun, documentNounTitle, documentStatus, isQuoteDocument } from "@/lib/documents";
 import { money, shortDate } from "@/lib/format";
 import { getDepositStatus } from "@/lib/deposit";
@@ -30,6 +37,18 @@ import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus } 
 import { isAiVerificationEnabled, isProofImageForAi, parseStoredAiReview } from "@/lib/ai-proof-verification";
 import { requireUser } from "@/lib/supabase/server";
 import { invoiceStatuses } from "@/lib/types";
+import { PaymentPlanEditor } from "@/components/PaymentPlanEditor";
+import { InvoiceWorkMemoryPanel } from "@/components/workspace/InvoiceWorkMemoryPanel";
+import { WorkspaceMessageTemplatesCard } from "@/components/workspace/WorkspaceMessageTemplatesCard";
+import { parsePaymentPlan } from "@/lib/payment-plan";
+import {
+  computeRecoveryForInvoice,
+  recoveryNextActionLabel,
+  recoveryTierLabel,
+  responsivenessLabel,
+  type RecoveryInvoiceRow
+} from "@/lib/recovery-engine";
+import { buildSuggestedNextActionsForInvoice } from "@/lib/workflow-assistant";
 
 function StatusChip({ tone, label }: { tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }) {
   const tones = {
@@ -83,12 +102,15 @@ export default async function InvoiceDetailPage({
   const { supabase, user } = await requireUser();
 
   const [
-    { data: invoice }, 
-    { data: clients }, 
-    { data: proofs }, 
-    { data: events }, 
-    { data: methods }, 
-    { data: lastReminder }
+    { data: invoice },
+    { data: clients },
+    { data: proofs },
+    { data: events },
+    { data: methods },
+    { data: lastReminder },
+    { data: recoveryContextRows },
+    { data: invoiceWorkNotes },
+    { data: workspaceTemplates }
   ] = await Promise.all([
     supabase.from("invoices").select("*, clients(id, name, phone, email)").eq("id", id).eq("user_id", user.id).maybeSingle(),
     supabase.from("clients").select("id, name, phone, email").eq("user_id", user.id).order("name", { ascending: true }),
@@ -110,7 +132,26 @@ export default async function InvoiceDetailPage({
       .eq("event_type", "reminder_copied")
       .order("created_at", { ascending: false })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle(),
+    supabase
+      .from("invoices")
+      .select(
+        "id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, exchange_rate_lbp_per_usd, payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
+      )
+      .eq("user_id", user.id),
+    supabase
+      .from("invoice_workspace_notes")
+      .select("id, invoice_id, category, body, is_pinned, created_at, updated_at")
+      .eq("invoice_id", id)
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("workspace_message_templates")
+      .select("id, category, label, body, is_favorite, use_count, last_used_at, created_at")
+      .eq("user_id", user.id)
+      .order("is_favorite", { ascending: false })
+      .order("last_used_at", { ascending: false })
+      .limit(40)
   ]);
 
   if (!invoice) {
@@ -160,6 +201,32 @@ export default async function InvoiceDetailPage({
     amount_usd: p.amount_usd,
     amount_lbp: p.amount_lbp
   }));
+  const parsedPlan = parsePaymentPlan((invoice as { payment_plan?: unknown }).payment_plan);
+  const recoveryAll = (recoveryContextRows || []) as RecoveryInvoiceRow[];
+  const recoveryInvoiceRow: RecoveryInvoiceRow = {
+    ...(invoice as RecoveryInvoiceRow),
+    payment_proofs: proofsWithSignedUrls.map((p) => ({
+      status: p.status,
+      amount_usd: p.amount_usd,
+      amount_lbp: p.amount_lbp,
+      confirmed_at: (p as { confirmed_at?: string | null }).confirmed_at,
+      uploaded_at: (p as { uploaded_at?: string | null }).uploaded_at
+    }))
+  };
+  const recoveryEvents = (events || []).map(
+    (e: { invoice_id: string; event_type: string; created_at: string; metadata?: unknown }) => ({
+      invoice_id: e.invoice_id,
+      event_type: e.event_type,
+      created_at: e.created_at,
+      metadata: (e.metadata as Record<string, unknown>) || null
+    })
+  );
+  const recovery = computeRecoveryForInvoice({
+    invoice: recoveryInvoiceRow,
+    proofs: minimalProofs,
+    events: recoveryEvents,
+    allUserInvoices: recoveryAll.map((r) => ({ ...r, payment_proofs: r.payment_proofs || [] }))
+  });
   const isQuote = isQuoteDocument(invoice);
   const displayStatus = isQuote
     ? documentStatus({ ...invoice, status: reconciledStatus })
@@ -200,6 +267,7 @@ export default async function InvoiceDetailPage({
   const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pay/${invoice.public_token}`;
   const clientEmail = invoice.clients?.email;
   const clientPhone = invoice.clients?.phone;
+  const pendingProofCount = proofsWithSignedUrls.filter((proof) => proof.status === "pending").length;
   const statusChips = [
     isExpired ? { tone: "danger" as const, label: "Expired link" } : null,
     displayStatus === "overdue" ? { tone: "danger" as const, label: "Overdue invoice" } : null,
@@ -215,6 +283,15 @@ export default async function InvoiceDetailPage({
     !isQuote && !hasPaymentMethods ? { tone: "warn" as const, label: "No payment methods active" } : null,
     invoice.public_token ? { tone: "good" as const, label: "Portal link active" } : null
   ].filter(Boolean) as Array<{ tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }>;
+
+  const invoiceSuggestedActions = buildSuggestedNextActionsForInvoice({
+    invoice: {
+      ...(invoice as any),
+      payment_proofs: proofsWithSignedUrls
+    },
+    allInvoices: recoveryAll.map((row) => ({ ...row, payment_proofs: row.payment_proofs || [] })) as any,
+    events: (events || []) as any
+  });
 
   const baseEvents = events || [];
   const collapsedBaseEvents = baseEvents.reduce((acc: any[], event: any) => {
@@ -247,6 +324,73 @@ export default async function InvoiceDetailPage({
         ...collapsedBaseEvents
       ]
     : collapsedBaseEvents;
+
+  const contextualActionCandidates: Array<ProductivityAction | null> = [
+    pendingProofCount > 0
+      ? {
+          label: "Review proofs",
+          description: `${pendingProofCount} pending upload${pendingProofCount === 1 ? "" : "s"}`,
+          href: "#proofs-review",
+          icon: FileCheck2,
+          badge: pendingProofCount,
+          tone: "attention"
+        }
+      : null,
+    !isQuote && balance.primaryBalance > 0
+      ? {
+          label: displayStatus === "overdue" ? "Copy reminder" : "Follow up",
+          description: displayStatus === "overdue" ? "Recovery action first" : "Balance still open",
+          href: "#follow-up",
+          icon: MessageCircle,
+          tone: displayStatus === "overdue" ? "attention" : "default"
+        }
+      : null,
+    showExtendValidity
+      ? {
+          label: "Extend validity",
+          description: isExpired ? "Payment link expired" : "Payment link expiring soon",
+          href: "#extend-validity",
+          icon: RefreshCw,
+          tone: "attention"
+        }
+      : null,
+    !isQuote && displayStatus !== "paid"
+      ? {
+          label: "Record payment",
+          description: "Cash, Whish, OMT, bank",
+          href: "#manual-payment",
+          icon: CircleDollarSign
+        }
+      : null,
+    acceptedProofs[0]?.receipt_token
+      ? {
+          label: "Open receipt",
+          description: "Share proof of payment",
+          href: `/receipt/${acceptedProofs[0].receipt_token}`,
+          icon: ReceiptText,
+          tone: "positive",
+          external: true
+        }
+      : null,
+    invoice.public_token
+      ? {
+          label: "Public page",
+          description: "Client payment surface",
+          href: `/pay/${invoice.public_token}`,
+          icon: ExternalLink,
+          external: true
+        }
+      : null,
+    invoice.public_token
+      ? {
+          label: "Copy link",
+          description: "Use the public URL panel below",
+          href: "#public-link",
+          icon: Copy
+        }
+      : null
+  ];
+  const contextualActions = contextualActionCandidates.filter((action): action is ProductivityAction => Boolean(action));
 
   return (
     <AppShell>
@@ -310,6 +454,24 @@ export default async function InvoiceDetailPage({
           </div>
         </section>
       </div>
+
+      <QuickActionGrid
+        className="mb-6"
+        title="Contextual actions"
+        subtitle={
+          displayStatus === "overdue"
+            ? "Recovery actions are prioritized for this overdue invoice."
+            : pendingProofCount > 0
+              ? "Proof review is the next operational step."
+              : displayStatus === "paid"
+                ? "Receipt and sharing actions are ready."
+                : "Fast actions for this invoice state."
+        }
+        actions={contextualActions}
+        compact
+      />
+
+      <SuggestedNextActionsCard actions={invoiceSuggestedActions} />
 
       {isExpired && (
         <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4">
@@ -408,14 +570,68 @@ export default async function InvoiceDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+          {!isQuote && recovery ? (
+            <section className="panel border-indigo-100 bg-indigo-50/40">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-ink">Recovery overview</h2>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Priority tier: {recoveryTierLabel(recovery.tier)}. Derived from due dates,
+                    balances, reminders you copied, portal views, and this client&apos;s paid history.
+                  </p>
+                </div>
+                <Link className="btn btn-secondary text-xs" href="/recoveries">
+                  Recovery center
+                </Link>
+              </div>
+              <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+                <div>
+                  <p>
+                    <span className="font-semibold text-ink">Days overdue:</span> {recovery.daysOverdue}
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-semibold text-ink">Last reminder copied:</span>{" "}
+                    {recovery.lastReminderAt ? shortDate(recovery.lastReminderAt) : "—"}
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-semibold text-ink">Client pattern:</span> {responsivenessLabel(recovery.responsiveness)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase text-slate-500">Suggested next steps</p>
+                  <ul className="mt-1 list-inside list-decimal">
+                    {recovery.nextActions.map((a) => (
+                      <li key={a}>{recoveryNextActionLabel(a)}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {!isQuote && balance.primaryBalance > 0 && !balance.unknown ? (
+            <PaymentPlanEditor
+              invoiceId={invoice.id}
+              currency={balance.primaryCurrency as "USD" | "LBP"}
+              remainingPrimary={balance.primaryBalance}
+              initialPlan={parsedPlan}
+            />
+          ) : null}
+
           {!isQuote && (
             <FollowUpSection 
               invoice={invoice} 
               client={invoice.clients} 
               remainingBalance={balance} 
               lastReminder={lastReminder}
+              events={(events || []) as any}
+              proofs={proofsWithSignedUrls as any}
             />
           )}
+
+          <WorkspaceMessageTemplatesCard initialTemplates={(workspaceTemplates || []) as any} />
+
+          <InvoiceWorkMemoryPanel invoiceId={invoice.id} initialNotes={(invoiceWorkNotes || []) as any} />
 
           {showExtendValidity && (
             <ExtendInvoiceValidityForm 
@@ -424,7 +640,7 @@ export default async function InvoiceDetailPage({
             />
           )}
 
-          <section className="panel">
+          <section id="public-link" className="panel scroll-mt-24">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-ink">Public link</h2>
@@ -602,7 +818,7 @@ export default async function InvoiceDetailPage({
           )}
 
           {!isQuote && (
-            <section className="panel">
+            <section id="proofs-review" className="panel scroll-mt-24">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-bold text-ink">Payments and proofs</h2>

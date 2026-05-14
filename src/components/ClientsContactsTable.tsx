@@ -160,7 +160,7 @@ function InvoiceSummary({ client }: { client: ClientContactsTableItem }) {
 
 function DetailMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
       <div className="mt-1 text-sm font-bold text-ink">{value}</div>
     </div>
@@ -169,7 +169,7 @@ function DetailMetric({ label, value }: { label: string; value: ReactNode }) {
 
 function EditClientForm({ client }: { client: ClientContactsTableItem }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
       <form action={updateClientAction} className="grid gap-3">
         <input name="id" type="hidden" value={client.id} />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -250,7 +250,7 @@ function ClientDetailsModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.18 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-3 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <motion.div
@@ -258,7 +258,7 @@ function ClientDetailsModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.94, opacity: 0, y: 18 }}
         transition={{ type: "spring", stiffness: 320, damping: 28, mass: 0.75 }}
-        className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-soft"
+        className="relative max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200/80 bg-white p-5 shadow-soft"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -557,8 +557,8 @@ export function ClientsContactsTable({ clients }: ClientsContactsTableProps) {
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
-        <div className="hidden border-b border-slate-200 bg-slate-50/90 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid md:grid-cols-[36px_minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(88px,0.55fr)_92px] md:items-center md:gap-3 lg:px-5">
+      <section className="q-table-shell">
+        <div className="q-table-head hidden px-4 py-3 md:grid md:grid-cols-[36px_minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(88px,0.55fr)_92px] md:items-center md:gap-3 lg:px-5">
           <label className="flex items-center justify-center">
             <input
               aria-label="Select all visible clients"
@@ -605,7 +605,7 @@ export function ClientsContactsTable({ clients }: ClientsContactsTableProps) {
                   >
                     <div
                       className={cn(
-                        "hidden border-b border-slate-100 px-4 py-3 transition hover:bg-slate-50/80 md:grid md:grid-cols-[36px_minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(88px,0.55fr)_92px] md:items-center md:gap-3 lg:px-5",
+                        "hidden border-b border-slate-100/90 px-4 py-3 transition-[background-color,box-shadow] duration-q hover:bg-slate-50/80 md:grid md:grid-cols-[36px_minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(88px,0.55fr)_92px] md:items-center md:gap-3 lg:px-5",
                         selected && "bg-cedar/5"
                       )}
                     >
@@ -647,7 +647,7 @@ export function ClientsContactsTable({ clients }: ClientsContactsTableProps) {
                       </button>
                     </div>
 
-                    <div className="border-b border-slate-100 p-4 md:hidden">
+                    <div className="border-b border-slate-100 bg-white/95 p-4 md:hidden">
                       <div className="flex items-start gap-3">
                         <input
                           aria-label={`Select ${client.name}`}
@@ -705,8 +705,13 @@ export function ClientsContactsTable({ clients }: ClientsContactsTableProps) {
                 {clients.length === 0 ? (
                   <PremiumEmptyState
                     title="No clients yet."
-                    description="Add a client to start creating invoices and tracking statement balances."
-                    example="Example: “Acme Studio — Beirut” with WhatsApp phone for faster proof follow-up."
+                    description="Add the first relationship your invoices, reminders, and statements will connect to."
+                    guidance={[
+                      "Save the WhatsApp phone or email you use for payment follow-up.",
+                      "Client records keep invoices, balances, and receipts grouped together.",
+                      "After adding a client, create an invoice from their profile or the invoice page."
+                    ]}
+                    example="Example: Acme Studio, Beirut, with the finance contact phone."
                     icon={<User className="h-6 w-6" aria-hidden="true" />}
                     action={
                       <Link className="btn btn-primary" href="/clients/new">

@@ -31,7 +31,7 @@ export default async function PaymentMethodsPage() {
         action={<a className="btn btn-primary" href="#payment-methods">Manage methods</a>}
       />
       <div className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+        <div className="rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-ink">Public payment readiness</p>
