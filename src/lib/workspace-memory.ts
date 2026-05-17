@@ -4,7 +4,17 @@ import { parsePaymentPlan } from "@/lib/payment-plan";
 import { getDisplayInvoiceStatus, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
 
 export type ClientNoteCategory = "operational" | "payment" | "communication" | "recovery" | "general";
-export type InvoiceNoteCategory = "project" | "delivery" | "revision" | "milestone" | "handoff" | "general";
+export type InvoiceNoteCategory =
+  | "project"
+  | "delivery"
+  | "revision"
+  | "milestone"
+  | "handoff"
+  | "assignment"
+  | "finance"
+  | "recovery"
+  | "operational"
+  | "general";
 
 export type ClientWorkspaceNoteRow = {
   id: string;
@@ -153,7 +163,13 @@ const TIMELINE_EVENT_TYPES = new Set([
   "payment_plan_saved",
   "payment_plan_cleared",
   "payment_plan_milestone_updated",
-  "invoice_expired"
+  "invoice_expired",
+  "assignment_created",
+  "assignment_reassigned",
+  "assignment_status_changed",
+  "assignment_completed",
+  "assignment_note_added",
+  "handoff_completed"
 ]);
 
 export function buildClientMemoryTimeline(input: {
@@ -451,5 +467,9 @@ export const INVOICE_NOTE_CATEGORY_LABELS: Record<InvoiceNoteCategory, string> =
   revision: "Revision",
   milestone: "Milestone",
   handoff: "Handoff",
+  assignment: "Assignment",
+  finance: "Finance",
+  recovery: "Recovery",
+  operational: "Operational",
   general: "General"
 };

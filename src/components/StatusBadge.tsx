@@ -56,8 +56,8 @@ const labels: Record<string, string> = {
 };
 
 const sizeClasses = {
-  sm: "min-h-7 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-tight ring-1 shadow-sm",
-  md: "min-h-8 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 shadow-sm"
+  sm: "min-h-7 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-tight ring-[0.5px] shadow-sm",
+  md: "min-h-8 rounded-full px-2.5 py-1 text-xs font-semibold ring-[0.5px] shadow-sm"
 };
 
 export function StatusBadge({
@@ -77,7 +77,7 @@ export function StatusBadge({
 
   return (
     <span className={`inline-flex max-w-full shrink-0 items-center justify-center border border-white/50 ${sz} ${tone} ${className}`}>
-      <span className="truncate font-medium">{label || labels[value] || value}</span>
+      <span className="truncate font-medium" style={{ letterSpacing: "0.01em" }}>{label || labels[value] || value}</span>
     </span>
   );
 }

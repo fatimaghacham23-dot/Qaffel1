@@ -33,13 +33,13 @@ export default async function ReportsPage() {
 
   return (
     <AppShell>
-      <div className="mb-6 rounded-3xl border border-slate-200/70 bg-white/[0.65] p-4 shadow-card backdrop-blur sm:p-5">
-        <p className="q-section-label mb-1 text-slate-500">Workspace</p>
+      <div className="mb-7 rounded-2xl border border-slate-200/55 bg-white/[0.65] p-5 shadow-card backdrop-blur sm:p-6">
+        <p className="q-section-label mb-1.5 text-slate-500">Workspace</p>
         <h1 className="page-title">Monthly reports</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-slate-600">
           Internal summaries from your workspace. Download CSV per month or create a read-only report link from the export center.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap gap-2">
           <Link href="/export#shared-reports" className="btn btn-secondary text-xs">
             <Share2 className="h-4 w-4" aria-hidden />
             Create share link
@@ -76,7 +76,7 @@ export default async function ReportsPage() {
             </thead>
             <tbody>
               {[...bundle.monthlyReports].reverse().map((row) => (
-                <tr key={row.monthKey} className="border-b border-slate-100 transition hover:bg-slate-50/80 last:border-0">
+                <tr key={row.monthKey} className="border-b border-slate-100/80 transition hover:bg-slate-50/60 last:border-0">
                   <td className="px-4 py-3 font-semibold text-ink">{row.monthLabel}</td>
                   <td className="px-4 py-3">{row.invoicesCreated}</td>
                   <td className="px-4 py-3 font-mono text-xs">{row.paidTotalUsd.toFixed(2)}</td>

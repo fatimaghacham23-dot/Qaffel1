@@ -100,11 +100,11 @@ export default async function ClientsPage() {
         }
       />
 
-      <div className="mb-5 rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-card backdrop-blur sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-ink">Client data readiness</p>
-            <p className="mt-1 text-sm text-slate-600">Contact gaps and balance attention are flagged before follow-up.</p>
+            <p className="mt-1.5 text-sm text-slate-600">Contact gaps and balance attention are flagged before follow-up.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusBadge status={missingPhoneCount > 0 ? "warning" : "complete"} label={missingPhoneCount > 0 ? `${missingPhoneCount} missing phone` : "Phones complete"} />

@@ -24,6 +24,8 @@ interface FollowUpSectionProps {
   lastReminder?: {
     created_at: string;
     metadata: any;
+    actor_name?: string | null;
+    actor_role?: string | null;
   } | null;
   events?: any[];
   proofs?: any[];
@@ -165,6 +167,8 @@ export function FollowUpSection({
           {lastReminder && (
             <p className="mt-1 text-[10px] text-slate-400 italic">
               Last reminder: {shortDate(lastReminder.created_at)}
+              {lastReminder.actor_name ? ` by ${lastReminder.actor_name}` : ""}
+              {lastReminder.metadata?.channel ? ` via ${lastReminder.metadata.channel}` : ""}
             </p>
           )}
         </div>

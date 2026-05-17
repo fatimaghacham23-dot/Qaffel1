@@ -64,35 +64,52 @@ export function MissionCollapsible({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full touch-manipulation items-start justify-between gap-3 rounded-t-[1.35rem] px-5 py-4 text-left transition-colors duration-q hover:bg-slate-50/90 active:bg-slate-100/80 sm:px-6 sm:py-5"
+        className="flex w-full touch-manipulation items-start justify-between gap-4 rounded-t-[var(--q-radius-2xl)] px-5 py-5 text-left transition-colors hover:bg-slate-50/60 active:bg-slate-100/50 sm:px-7 sm:py-6"
+        style={{ transitionDuration: "var(--q-duration-normal)", transitionTimingFunction: "var(--q-ease)" }}
       >
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <ChevronDown
-              className={cn("mt-0.5 h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ease-out", open ? "rotate-0" : "-rotate-90")}
+              className={cn(
+                "mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-transform",
+                open ? "rotate-0" : "-rotate-90"
+              )}
+              style={{ transitionDuration: "var(--q-duration-expand)", transitionTimingFunction: "var(--q-ease-spring)" }}
               aria-hidden
             />
             <h2 className="q-title-sm">{title}</h2>
             {badge}
           </div>
-          {subtitle ? <p className="q-body-muted mt-2 pl-6 sm:pl-7">{subtitle}</p> : null}
+          {subtitle ? <p className="q-body-muted mt-2.5 pl-6 sm:pl-7">{subtitle}</p> : null}
         </div>
-        <span className="mt-0.5 max-w-[10rem] shrink-0 rounded-full border border-slate-200/80 bg-slate-50/90 px-2.5 py-1 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-700">
+        <span className="mt-0.5 max-w-[10rem] shrink-0 rounded-full border border-slate-200/60 bg-slate-50/70 px-3 py-1 text-center text-[10px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
           {toggleLabel}
         </span>
       </button>
       <div
         className={cn(
-          "grid border-t border-slate-100 transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+          "grid border-t border-slate-100/60 motion-reduce:transition-none",
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         )}
+        style={{
+          transitionProperty: "grid-template-rows",
+          transitionDuration: "var(--q-duration-expand)",
+          transitionTimingFunction: "var(--q-ease)"
+        }}
       >
         <div className="min-h-0 overflow-hidden">
           <div
             className={cn(
-              "px-4 pb-5 pt-3 transition-opacity duration-200 ease-out motion-reduce:transition-none sm:px-6 sm:pb-6",
+              "px-5 pb-6 pt-4 motion-reduce:transition-none sm:px-7 sm:pb-7",
               open ? "opacity-100" : "opacity-0"
             )}
+            style={{
+              transitionProperty: "opacity, transform",
+              transitionDuration: "var(--q-duration-slow)",
+              transitionTimingFunction: "var(--q-ease)",
+              transitionDelay: open ? "80ms" : "0ms",
+              transform: open ? "translateY(0)" : "translateY(-4px)"
+            }}
           >
             {children}
           </div>

@@ -26,6 +26,14 @@ import { documentNounTitle, documentStatus, isQuoteDocument } from "@/lib/docume
 import { money, shortDate } from "@/lib/format";
 import { getFriendlyLifecycleLabel, getInvoicePriorityFlags } from "@/lib/operations";
 import { getDisplayInvoiceStatus, reconcileInvoiceStatus } from "@/lib/status";
+import {
+  assignmentInitials,
+  formatAssignee,
+  isOpenAssignment,
+  ownershipLine,
+  sortAssignments,
+  type OperationalAssignmentRow
+} from "@/lib/assignments";
 import { cn } from "@/lib/utils";
 import type { InvoiceStatus } from "@/lib/types";
 
@@ -47,6 +55,7 @@ export type InvoiceTableInvoice = {
   status: InvoiceStatus;
   valid_until?: string | null;
   payment_proofs?: { id?: string; status?: string | null; amount_usd?: number | null; amount_lbp?: number | null; uploaded_at?: string | null }[];
+  assignments?: OperationalAssignmentRow[];
 };
 
 type StatusFilter = "all" | InvoiceStatus | "quote" | "approved" | "expired";
@@ -108,6 +117,32 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
     <div>
       <p className="q-section-label mb-1.5 text-slate-400">{label}</p>
       <div className="text-sm font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
+
+function InvoiceAssignmentBadges({ assignments }: { assignments?: OperationalAssignmentRow[] }) {
+  const open = (assignments || []).filter((assignment) => isOpenAssignment(assignment.status)).sort(sortAssignments);
+  if (!open.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {open.slice(0, 2).map((assignment) => (
+        <span
+          key={assignment.id}
+          className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+          title={ownershipLine(assignment)}
+        >
+          <span className="grid h-4 w-4 place-items-center rounded-full bg-slate-100 text-[8px] text-slate-600">
+            {assignmentInitials(assignment)}
+          </span>
+          <span className="truncate">{formatAssignee(assignment)}</span>
+        </span>
+      ))}
+      {open.length > 2 ? (
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+          +{open.length - 2}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -192,6 +227,7 @@ function InvoiceRow({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-ink">{title}</p>
             <p className="mt-0.5 truncate font-mono text-xs text-slate-500">{invoiceNumber}</p>
+            <InvoiceAssignmentBadges assignments={invoice.assignments} />
           </div>
 
           <span className="q-figure w-28 shrink-0 text-right text-sm font-semibold tabular-nums text-ink">{formatAmount(invoice)}</span>
@@ -202,6 +238,7 @@ function InvoiceRow({
             <div className="min-w-0">
               <p className="truncate text-base font-bold text-ink">{title}</p>
               <p className="mt-1 truncate font-mono text-xs text-slate-500">{invoiceNumber}</p>
+              <InvoiceAssignmentBadges assignments={invoice.assignments} />
             </div>
             <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
               <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden="true" />

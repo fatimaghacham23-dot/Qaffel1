@@ -55,10 +55,26 @@ export function LoginForm() {
   }
 
   return (
-    <div className="panel mx-auto w-full max-w-md">
-      <div className="mb-5 flex rounded-md bg-slate-100 p-1">
+    <div
+      className="relative overflow-hidden rounded-2xl border border-slate-200/50 bg-white/[0.92] p-6 backdrop-blur-xl sm:p-7"
+      style={{ boxShadow: "var(--q-shadow-elevated)" }}
+    >
+      {/* Subtle top accent line */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cedar/20 to-transparent" aria-hidden="true" />
+
+      {/* Mode toggle — premium tab switcher */}
+      <div className="mb-6 flex rounded-xl bg-slate-100/70 p-1">
         <button
-          className={`flex-1 rounded px-3 py-2 text-sm font-semibold ${mode === "login" ? "bg-white shadow-sm" : "text-slate-600"}`}
+          className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-[background-color,color,box-shadow] ${
+            mode === "login"
+              ? "bg-white text-ink"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+          style={{
+            boxShadow: mode === "login" ? "var(--q-shadow-xs)" : undefined,
+            transitionDuration: "var(--q-duration-normal)",
+            transitionTimingFunction: "var(--q-ease)"
+          }}
           onClick={() => {
             setMode("login");
             setError("");
@@ -69,7 +85,16 @@ export function LoginForm() {
           Login
         </button>
         <button
-          className={`flex-1 rounded px-3 py-2 text-sm font-semibold ${mode === "signup" ? "bg-white shadow-sm" : "text-slate-600"}`}
+          className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-[background-color,color,box-shadow] ${
+            mode === "signup"
+              ? "bg-white text-ink"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+          style={{
+            boxShadow: mode === "signup" ? "var(--q-shadow-xs)" : undefined,
+            transitionDuration: "var(--q-duration-normal)",
+            transitionTimingFunction: "var(--q-ease)"
+          }}
           onClick={() => {
             setMode("signup");
             setError("");
@@ -80,6 +105,7 @@ export function LoginForm() {
           Sign up
         </button>
       </div>
+
       <form className="grid gap-4" onSubmit={submit}>
         {mode === "signup" ? (
           <>
@@ -109,12 +135,49 @@ export function LoginForm() {
           </label>
           <input className="field" id="password" minLength={6} name="password" required type="password" />
         </div>
-        {message ? <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{message}</p> : null}
-        {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-        <button className="btn btn-primary w-full" disabled={loading} type="submit">
-          {loading ? "Working..." : mode === "login" ? "Login" : "Create account"}
+        {message ? (
+          <div
+            className="rounded-xl border border-emerald-200/60 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-800"
+            style={{ boxShadow: "var(--q-shadow-xs)" }}
+          >
+            {message}
+          </div>
+        ) : null}
+        {error ? (
+          <div
+            className="rounded-xl border border-red-200/60 bg-red-50/80 px-4 py-3 text-sm text-red-700"
+            style={{ boxShadow: "var(--q-shadow-xs)" }}
+          >
+            {error}
+          </div>
+        ) : null}
+        <button
+          className="btn btn-primary mt-1 w-full"
+          disabled={loading}
+          type="submit"
+        >
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Working…
+            </span>
+          ) : mode === "login" ? (
+            "Login"
+          ) : (
+            "Create account"
+          )}
         </button>
       </form>
+
+      {/* Footer note */}
+      <p className="mt-5 text-center text-[11px] text-slate-400">
+        {mode === "login"
+          ? "Don't have an account? Switch to Sign up above."
+          : "Already have an account? Switch to Login above."}
+      </p>
     </div>
   );
 }

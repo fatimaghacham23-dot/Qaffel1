@@ -102,34 +102,36 @@ export function DashboardFinancialKpiStrip(props: {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="q-panel overflow-hidden p-5 sm:p-6">
+    <div className="space-y-5">
+      <div className="q-elevated overflow-hidden p-6 sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="q-section-label text-slate-500">Primary cash signal</p>
-            <p className="mt-1.5 text-sm font-semibold text-slate-600">Collected this month</p>
+            <p className="mt-2 text-sm font-medium text-slate-600">Collected this month</p>
           </div>
-          <span className="rounded-full border border-emerald-200/70 bg-emerald-50/90 px-2.5 py-1 text-[11px] font-semibold text-emerald-900">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/50 bg-emerald-50/70 px-3 py-1 text-[11px] font-semibold text-emerald-800">
+            <span className="q-pulse-dot text-emerald-500" />
             Live
           </span>
         </div>
-        <p className="q-figure mt-5 text-3xl font-semibold leading-none tracking-tight text-ink sm:text-4xl">
+        <p className="q-kpi-hero mt-6">
           <AnimatedUsd value={props.paidThisMonthUsd} />
         </p>
-        <p className="q-caption mt-3 max-w-xl">
+        <p className="q-caption mt-4 max-w-xl">
           Confirmed invoice payments only. Pending proofs stay out until manual review is complete.
         </p>
       </div>
 
-      <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible lg:grid-cols-4">
+      <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible lg:grid-cols-4">
         {secondaries.map((k) => (
           <Link
             key={k.label}
             href={k.href}
-            className="q-surface-hover q-figure min-w-[10rem] shrink-0 snap-start rounded-3xl border border-slate-200/65 bg-white/[0.93] px-4 py-3.5 shadow-card sm:min-w-0"
+            className="q-surface-hover q-figure min-w-[11rem] shrink-0 snap-start rounded-2xl border border-slate-200/50 bg-white/90 px-5 py-4 sm:min-w-0"
+            style={{ boxShadow: "var(--q-shadow-xs)" }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{k.label}</p>
-            <p className={`mt-2 text-lg font-semibold tabular-nums sm:text-xl ${toneText[k.tone || "slate"]}`}>
+            <p className="q-section-label">{k.label}</p>
+            <p className={`q-kpi-secondary mt-3 ${toneText[k.tone || "slate"]}`}>
               {k.valueUsd !== undefined ? <AnimatedUsd value={k.valueUsd} /> : null}
               {k.valueInt !== undefined ? <AnimatedInt value={k.valueInt} /> : null}
             </p>

@@ -28,14 +28,14 @@ function HubCard({
   icon: typeof Download;
 }) {
   return (
-    <Link href={href} className="q-surface-hover rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+    <Link href={href} className="q-surface-hover rounded-2xl border border-slate-200/60 bg-white p-5 shadow-card">
       <div className="flex gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cedar/10 text-cedar">
           <Icon className="h-5 w-5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <h2 className="text-base font-bold text-ink">{title}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600">{body}</p>
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{body}</p>
         </div>
       </div>
     </Link>
@@ -89,22 +89,22 @@ export default async function ConnectivityPage() {
         }
       />
 
-      <section className="mb-6 grid gap-3 md:grid-cols-4">
+      <section className="mb-7 grid gap-4 md:grid-cols-4">
         <PremiumStatCard label="Export rows" value={model.datasets.reduce((sum, dataset) => sum + dataset.rows.length, 0).toLocaleString()} detail="Across all operational datasets" />
         <PremiumStatCard label="Shared reports" value={(shares || []).length.toLocaleString()} detail="Active tokenized links" />
         <PremiumStatCard label="Open recoveries" value={model.stats.openRecoveries.toLocaleString()} detail="Manual follow-through rows" />
         <PremiumStatCard label="Proof queue" value={model.snapshot.proofReviewQueue.toLocaleString()} detail="Awaiting manual review" />
       </section>
 
-      <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <HubCard title="Advanced exports" body="Filtered CSVs, archive bundles, and print-ready summaries." href="/export" icon={Download} />
         <HubCard title="Shared reports" body="Create and manage printable read-only report links." href="/export#shared-reports" icon={Share2} />
         <HubCard title="Public assets" body="Profile, payment methods, receipt links, and client-facing business identity." href="/settings/profile" icon={FileText} />
         <HubCard title="Operational archive" body="Own your workspace history with combined archive exports." href="/export" icon={Archive} />
       </section>
 
-      <section className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="q-surface p-4 sm:p-5">
+      <section className="mb-7 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="q-surface p-5 sm:p-6">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cedar/10 text-cedar">
               <Sparkles className="h-5 w-5" aria-hidden />
@@ -115,19 +115,19 @@ export default async function ConnectivityPage() {
               <p className="q-body-muted mt-1">A quick operational snapshot for manual sharing and internal review.</p>
             </div>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200/60 bg-slate-50/60 p-4">
               <p className="q-section-label">Collected</p>
-              <p className="mt-2 text-lg font-bold text-ink">{money(model.snapshot.collectedUsd, "USD")}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{money(model.snapshot.collectedLbp, "LBP")}</p>
+              <p className="mt-2 text-lg font-semibold text-ink">{money(model.snapshot.collectedUsd, "USD")}</p>
+              <p className="mt-1 text-sm font-medium text-slate-700">{money(model.snapshot.collectedLbp, "LBP")}</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="rounded-2xl border border-slate-200/60 bg-slate-50/60 p-4">
               <p className="q-section-label">Open</p>
-              <p className="mt-2 text-lg font-bold text-ink">{money(model.snapshot.openUsd, "USD")}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{money(model.snapshot.openLbp, "LBP")}</p>
+              <p className="mt-2 text-lg font-semibold text-ink">{money(model.snapshot.openUsd, "USD")}</p>
+              <p className="mt-1 text-sm font-medium text-slate-700">{money(model.snapshot.openLbp, "LBP")}</p>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             {archiveDataset ? (
               <CsvDownloadButton rows={archiveDataset.rows} label="Export workspace archive" className="btn btn-primary" filename={archiveDataset.filename} />
             ) : null}
@@ -137,7 +137,7 @@ export default async function ConnectivityPage() {
           </div>
         </div>
 
-        <aside className="q-surface p-4 sm:p-5">
+        <aside className="q-surface p-5 sm:p-6">
           <p className="q-section-label">Active report links</p>
           <h2 className="q-title-sm mt-1">Share continuity</h2>
           <div className="mt-4 grid gap-3">
@@ -149,8 +149,8 @@ export default async function ConnectivityPage() {
             {(shares || []).map((share: any) => {
               const url = sharedReportUrl(String(share.token));
               return (
-                <article key={String(share.id)} className="rounded-2xl border border-slate-200 bg-white p-3">
-                  <p className="text-sm font-bold text-ink">{share.title || humanReportType(String(share.report_type))}</p>
+                <article key={String(share.id)} className="rounded-2xl border border-slate-200/60 bg-white p-4">
+                  <p className="text-sm font-semibold text-ink">{share.title || humanReportType(String(share.report_type))}</p>
                   <p className="mt-1 text-xs text-slate-500">Expires {formatShareExpiration(share.expires_at)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link href={`/share/report/${share.token}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-xs">
@@ -165,10 +165,10 @@ export default async function ConnectivityPage() {
         </aside>
       </section>
 
-      <section className="mb-6 grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <section className="mb-7 grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
         <ConnectivityImportTool />
 
-        <div className="q-surface p-4 sm:p-5">
+        <div className="q-surface p-5 sm:p-6">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
               <MessageCircle className="h-5 w-5" aria-hidden />
@@ -181,8 +181,8 @@ export default async function ConnectivityPage() {
           </div>
           <div className="mt-4 grid gap-3">
             {model.whatsappSuggestions.map((suggestion) => (
-              <article key={suggestion.title} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-                <p className="text-sm font-bold text-ink">{suggestion.title}</p>
+              <article key={suggestion.title} className="rounded-2xl border border-slate-200/60 bg-slate-50/60 p-4">
+                <p className="text-sm font-semibold text-ink">{suggestion.title}</p>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{suggestion.body}</p>
                 <div className="mt-3">
                   <CopyButton value={suggestion.body} label="Copy message" className="btn btn-secondary btn-xs" />
@@ -193,7 +193,7 @@ export default async function ConnectivityPage() {
         </div>
       </section>
 
-      <section className="q-surface p-4 sm:p-5">
+      <section className="q-surface p-5 sm:p-6">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-slate-100 text-slate-700">
             <Import className="h-5 w-5" aria-hidden />

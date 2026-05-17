@@ -19,7 +19,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex min-h-10 w-full items-center justify-between rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 text-sm text-ink shadow-[inset_0_1px_0_rgba(15,23,42,0.02)] outline-none transition-[border-color,box-shadow,background-color] duration-q placeholder:text-slate-400 focus:border-cedar/50 focus:ring-4 focus:ring-cedar/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:opacity-70 [&>span]:line-clamp-1",
+      "flex min-h-11 w-full items-center justify-between rounded-2xl border border-slate-200/70 bg-white/95 px-4 py-2.5 text-sm text-ink shadow-[inset_0_1px_0_rgba(15,23,42,0.02)] outline-none transition-[border-color,box-shadow,background-color] duration-q placeholder:text-slate-400 focus:border-cedar/50 focus:shadow-[inset_0_1px_0_rgba(15,23,42,0.02),0_0_0_3px_rgba(17,100,102,0.08)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:opacity-70 [&>span]:line-clamp-1",
       className,
     )}
     {...props}
@@ -75,7 +75,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white text-ink shadow-card data-[state=closed]:animate-q-fade-in data-[state=open]:animate-q-fade-up",
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-slate-200/60 bg-white/[0.97] text-ink shadow-float backdrop-blur-2xl data-[state=closed]:animate-q-fade-in data-[state=open]:animate-q-scale-in",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,
@@ -118,7 +118,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-lg py-2 pl-8 pr-2 text-sm text-slate-700 outline-none transition focus:bg-cedar/10 focus:text-cedar data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-default select-none items-center rounded-lg py-2 pl-8 pr-2 text-sm text-slate-700 outline-none transition duration-q focus:bg-cedar/[0.08] focus:text-cedar data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     {...props}

@@ -5,23 +5,37 @@ import { InteractiveInvoicesTable, type InvoiceTableInvoice } from "@/components
 import { SettingsPageHeader } from "@/components/SettingsPageHeader";
 import { StatisticsCard } from "@/components/statistics-card-2";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getAssignmentMembers, getAssignmentsForTargets } from "@/lib/assignment-data";
 import { documentStatus, isQuoteDocument } from "@/lib/documents";
+import { getWorkspaceContext } from "@/lib/get-workspace";
 import { getDisplayInvoiceStatus } from "@/lib/status";
 import { requireUser } from "@/lib/supabase/server";
 import { invoiceStatuses } from "@/lib/types";
 
 export default async function InvoicesPage() {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
   const [{ data: invoices }, { data: activeMethods }] = await Promise.all([
     supabase
       .from("invoices")
       .select("*, clients(name), payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at)")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false }),
-    supabase.from("payment_methods").select("id").eq("user_id", user.id).eq("is_active", true).limit(1)
+    supabase.from("payment_methods").select("id").eq("workspace_id", ctx.workspaceId).eq("is_active", true).limit(1)
   ]);
 
-  const safeInvoices = (invoices || []) as InvoiceTableInvoice[];
+  const assignmentMembers = await getAssignmentMembers(supabase, ctx.workspaceId);
+  const assignmentsByInvoice = await getAssignmentsForTargets({
+    supabase,
+    workspaceId: ctx.workspaceId,
+    targetType: "invoice",
+    targetIds: (invoices || []).map((invoice) => invoice.id),
+    members: assignmentMembers
+  });
+  const safeInvoices = (invoices || []).map((invoice) => ({
+    ...invoice,
+    assignments: assignmentsByInvoice.get(invoice.id) || []
+  })) as InvoiceTableInvoice[];
   const summary = safeInvoices.reduce(
     (totals, invoice) => {
       const isQuote = isQuoteDocument(invoice);
@@ -67,11 +81,11 @@ export default async function InvoicesPage() {
         }
       />
 
-      <div className="mb-5 rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-card backdrop-blur sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-ink">Document readiness</p>
-            <p className="mt-1 text-sm text-slate-600">Payment methods, overdue status, drafts, quotes, and public links are surfaced before clients see them.</p>
+            <p className="mt-1.5 text-sm text-slate-600">Payment methods, overdue status, drafts, quotes, and public links are surfaced before clients see them.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusBadge status={(activeMethods || []).length > 0 ? "active" : "warning"} label={(activeMethods || []).length > 0 ? "Payment methods active" : "No payment methods active"} />
@@ -81,7 +95,7 @@ export default async function InvoicesPage() {
         </div>
       </div>
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatisticsCard
           title="Total invoices"
           value={(summary.total - summary.quotes).toLocaleString()}

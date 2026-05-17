@@ -9,9 +9,10 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-3xl border border-slate-200/70 bg-white/[0.97] text-ink shadow-card",
+      "rounded-[var(--q-radius-xl)] border border-slate-200/50 bg-gradient-to-b from-white/[0.99] to-[rgba(250,252,250,0.96)] text-ink backdrop-blur-[2px]",
       className,
     )}
+    style={{ boxShadow: 'var(--q-shadow-card)' }}
     {...props}
   />
 ))

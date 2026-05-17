@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, requireUser } from "@/lib/supabase/server";
+import { getWorkspaceContext } from "@/lib/get-workspace";
+import { requirePermission, type WorkspaceRole } from "@/lib/permissions";
 import { getAcceptedProofTotals, reconcileInvoiceStatus, getRemainingBalance } from "@/lib/status";
 import { didSatisfyDeposit, getDepositRequest, roundCurrencyAmount } from "@/lib/deposit";
 import { normalizeDocumentType } from "@/lib/documents";
@@ -27,22 +29,37 @@ async function createInvoiceEvent({
   userId,
   eventType,
   message,
-  metadata = {}
+  metadata = {},
+  workspaceId,
+  actorId,
+  actorName,
+  actorRole
 }: {
   invoiceId: string;
   userId: string;
   eventType: string;
   message: string;
   metadata?: any;
+  workspaceId?: string | null;
+  actorId?: string | null;
+  actorName?: string | null;
+  actorRole?: WorkspaceRole | null;
 }) {
   const supabase = await createClient();
-  await supabase.from("invoice_events").insert({
+  const payload: Record<string, unknown> = {
     invoice_id: invoiceId,
     user_id: userId,
     event_type: eventType,
     message,
     metadata
-  });
+  };
+
+  if (workspaceId) payload.workspace_id = workspaceId;
+  if (actorId) payload.actor_id = actorId;
+  if (actorName) payload.actor_name = actorName;
+  if (actorRole) payload.actor_role = actorRole;
+
+  await supabase.from("invoice_events").insert(payload);
 }
 
 function text(formData: FormData, key: string) {
@@ -855,6 +872,8 @@ export async function setInvoiceStatusAction(formData: FormData) {
 
 export async function reviewProofAction(formData: FormData) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "proofs.review", "You do not have access to review payment proofs.");
   const proofId = text(formData, "proof_id");
   const invoiceId = text(formData, "invoice_id");
   const proofStatus = (text(formData, "status") || text(formData, "proof_status")) as "accepted" | "rejected";
@@ -865,12 +884,15 @@ export async function reviewProofAction(formData: FormData) {
   // Verify ownership of the invoice before updating anything
   const { data: invoice, error: invoiceCheckError } = await supabase
     .from("invoices")
-    .select("id, amount_usd, amount_lbp, currency, status, document_type, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, deposit_note")
+    .select("id, user_id, workspace_id, amount_usd, amount_lbp, currency, status, document_type, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, deposit_note")
     .eq("id", invoiceId)
-    .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (invoiceCheckError || !invoice) {
+  if (
+    invoiceCheckError ||
+    !invoice ||
+    ((invoice as any).workspace_id && (invoice as any).workspace_id !== ctx.workspaceId && (invoice as any).user_id !== user.id)
+  ) {
     throw new Error("Invoice not found or you do not have permission to review this proof.");
   }
 
@@ -938,6 +960,10 @@ export async function reviewProofAction(formData: FormData) {
     .update({
       status: proofStatus,
       confirmed_at: proofStatus === "accepted" ? new Date().toISOString() : null,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+      reviewer_name: ctx.userFullName,
+      reviewer_role: ctx.role,
       receipt_token: receiptToken
     })
     .eq("id", proofId)
@@ -969,8 +995,7 @@ export async function reviewProofAction(formData: FormData) {
   const { error: invoiceUpdateError } = await supabase
     .from("invoices")
     .update({ status: finalInvoiceStatus })
-    .eq("id", invoiceId)
-    .eq("user_id", user.id);
+    .eq("id", invoiceId);
 
   await assertOk(invoiceUpdateError);
   
@@ -980,6 +1005,10 @@ export async function reviewProofAction(formData: FormData) {
   await createInvoiceEvent({
     invoiceId,
     userId: user.id,
+    workspaceId: ctx.workspaceId,
+    actorId: user.id,
+    actorName: ctx.userFullName,
+    actorRole: ctx.role,
     eventType: proofStatus === "accepted" ? "proof_accepted" : "proof_rejected",
     message: proofStatus === "accepted" 
       ? `Payment proof accepted${isFullAccept ? " (Full)" : " (Partial)"}${isFullAccept && !hasPrimaryAmount ? " without submitted amount" : ""}`
@@ -991,6 +1020,10 @@ export async function reviewProofAction(formData: FormData) {
     await createInvoiceEvent({
       invoiceId,
       userId: user.id,
+      workspaceId: ctx.workspaceId,
+      actorId: user.id,
+      actorName: ctx.userFullName,
+      actorRole: ctx.role,
       eventType: `invoice_${finalInvoiceStatus}`,
       message: `Invoice marked ${finalInvoiceStatus}`
     });
@@ -1006,6 +1039,10 @@ export async function reviewProofAction(formData: FormData) {
       await createInvoiceEvent({
         invoiceId,
         userId: user.id,
+        workspaceId: ctx.workspaceId,
+        actorId: user.id,
+        actorName: ctx.userFullName,
+        actorRole: ctx.role,
         eventType: "deposit_satisfied",
         message: "Deposit satisfied",
         metadata: { proof_id: proofId, final_status: finalInvoiceStatus }
@@ -1013,8 +1050,23 @@ export async function reviewProofAction(formData: FormData) {
     }
   }
 
+  await supabase
+    .from("operational_assignments")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      last_action_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("target_type", "proof")
+    .eq("target_id", proofId)
+    .eq("assignment_type", "reviewer")
+    .in("status", ["open", "in_progress", "waiting"]);
+
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath("/proofs");
+  revalidatePath("/inbox");
 }
 
 export async function runAiProofVerificationAction(formData: FormData) {
@@ -1652,20 +1704,27 @@ export async function duplicateInvoiceAction(formData: FormData) {
 
 export async function recordReminderEventAction(invoiceId: string, stage: string, channel: string) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "recoveries.view", "You do not have access to record recovery activity.");
   
-  // Verify ownership
+  // Verify workspace access
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("id")
+    .select("id, user_id, workspace_id")
     .eq("id", invoiceId)
-    .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice || ((invoice as any).workspace_id && (invoice as any).workspace_id !== ctx.workspaceId && (invoice as any).user_id !== user.id)) {
+    throw new Error("Invoice not found");
+  }
 
   await createInvoiceEvent({
     invoiceId,
     userId: user.id,
+    workspaceId: ctx.workspaceId,
+    actorId: user.id,
+    actorName: ctx.userFullName,
+    actorRole: ctx.role,
     eventType: "reminder_copied",
     message: `Reminder copied (${channel})`,
     metadata: { 
@@ -1677,6 +1736,7 @@ export async function recordReminderEventAction(invoiceId: string, stage: string
 
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath("/recoveries");
+  revalidatePath("/inbox");
 }
 
 export async function extendInvoiceValidityAction(formData: FormData) {

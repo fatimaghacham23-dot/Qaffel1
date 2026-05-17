@@ -31,7 +31,6 @@ export function Clock({
         timeZone: timeZone,
       })
     )
-    setTime(displayTime)
 
     const hours = displayTime.getHours() % 12
     const minutes = displayTime.getMinutes()
@@ -75,26 +74,51 @@ export function Clock({
     if (secondHandShadowRef.current) {
       secondHandShadowRef.current.style.transform = `rotate(${currentSecondsAngle + 0.5}deg)`
     }
+
+    return displayTime
   }, [secondsMode, timeZone])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    updateClockHands()
+    let animationFrameId: number
+    let initialStateFrameId: number
+    let running = true
 
+    updateClockHands()
+    initialStateFrameId = requestAnimationFrame(() => {
+      if (running) setTime(updateClockHands())
+    })
+
+    // Update React state once per minute (for date display only)
     const minuteInterval = setInterval(() => {
-      updateClockHands()
+      setTime(updateClockHands())
     }, 60000)
 
-    let animationFrameId: number
+    // RAF loop — only updates DOM refs, no setState
     const animateSeconds = () => {
+      if (!running) return
       updateClockHands()
       animationFrameId = requestAnimationFrame(animateSeconds)
     }
     animateSeconds()
 
+    // Pause RAF when tab is hidden to save CPU
+    const onVisibility = () => {
+      if (document.hidden) {
+        running = false
+        cancelAnimationFrame(animationFrameId)
+      } else {
+        running = true
+        animateSeconds()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+
     return () => {
       clearInterval(minuteInterval)
+      cancelAnimationFrame(initialStateFrameId)
       cancelAnimationFrame(animationFrameId)
+      running = false
+      document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [updateClockHands])
 

@@ -363,11 +363,11 @@ export default async function DashboardPage() {
   return (
     <AppShell>
       <div className="q-dashboard-stack">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200/65 bg-white/[0.72] p-5 shadow-card backdrop-blur-md sm:p-6 md:p-7">
+      <div className="q-elevated flex flex-wrap items-center justify-between gap-5 bg-white/[0.72] p-6 backdrop-blur-md sm:p-7">
         <div>
           <p className="q-section-label text-cedar">Qaffel</p>
-          <h1 className="page-title">Mission control</h1>
-          <p className="q-subtitle mt-2 max-w-2xl">
+          <h1 className="page-title mt-1">Mission control</h1>
+          <p className="q-subtitle mt-2.5 max-w-2xl">
             Priorities first, then cash position and your live operations queue. Intelligence and long charts stay tucked away until you need them.
           </p>
         </div>
@@ -392,10 +392,10 @@ export default async function DashboardPage() {
       <WorkflowAssistantPanel model={workflowAssistant} />
 
       {recoveryRows.length > 0 ? (
-        <div className="flex flex-col gap-4 rounded-3xl border border-amber-200/55 bg-amber-50/45 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="flex flex-col gap-4 rounded-2xl border border-amber-200/50 bg-amber-50/40 p-6 shadow-card sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="q-section-label text-amber-800/90">Recovery center</p>
-            <p className="q-body mt-2 text-amber-950/85">
+            <p className="q-section-label text-amber-800/80">Recovery center</p>
+            <p className="q-body mt-2.5 text-amber-950/80">
               {recoveryRows.length} overdue file{recoveryRows.length === 1 ? "" : "s"} ·{" "}
               {money(recoveryDashKpis.overdueRecoverableUsd, "USD")} USD at risk (primary totals) · avg{" "}
               {recoveryDashKpis.avgDaysOverdue} days overdue
@@ -409,10 +409,10 @@ export default async function DashboardPage() {
 
       <DashboardSetupProgress model={businessLaunch} />
 
-      <section id="financial-snapshot" className="space-y-4">
+      <section id="financial-snapshot" className="space-y-5">
         <p className="q-section-label text-slate-500">Financial snapshot</p>
-        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
+        <div className="flex min-w-0 flex-col gap-5">
           <DashboardFinancialKpiStrip
             paidThisMonthUsd={paidThisMonth}
             waitingToCollectUsd={totalUnpaid}
@@ -440,12 +440,12 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div id="live-operations" className="space-y-3">
+      <div id="live-operations" className="space-y-4">
         <p className="q-section-label text-slate-500">Live operations</p>
         <OperationsCenterView model={opsModel} clientPhones={clientPhones} paymentConversion={paymentConversion} />
       </div>
 
-      <div className="q-stagger-children space-y-4">
+      <div className="q-stagger-children space-y-5">
         <MissionCollapsible
           id="dash-intelligence"
           title="Intelligence & analytics"
@@ -465,21 +465,21 @@ export default async function DashboardPage() {
           expandLabel="Expand analytics"
           collapseLabel="Collapse analytics"
         >
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-3xl border border-slate-200/70 bg-white/[0.97] p-5 shadow-card backdrop-blur-[2px] sm:p-6">
+              <div className="q-card p-5 sm:p-6">
                 <p className="q-section-label text-slate-500">Money overdue</p>
-                <p className="q-figure mt-3 text-2xl font-semibold tabular-nums tracking-tight text-ink">{money(overdueAmountUsd, "USD")}</p>
-                <p className="q-caption mt-2">Total USD still overdue on invoices</p>
+                <p className="q-figure mt-3.5 text-2xl font-semibold tabular-nums tracking-tight text-ink">{money(overdueAmountUsd, "USD")}</p>
+                <p className="q-caption mt-2.5">Total USD still overdue on invoices</p>
               </div>
 
-              <div className="rounded-3xl border border-slate-200/70 bg-white/[0.97] p-5 shadow-card backdrop-blur-[2px] sm:p-6">
+              <div className="q-card p-5 sm:p-6">
                 <p className="q-section-label text-slate-500">Open quotes</p>
-                <p className="q-figure mt-3 text-2xl font-semibold tabular-nums tracking-tight text-ink">{quoteCount.toLocaleString()}</p>
-                <p className="q-caption mt-2">Not counted as invoice balance waiting to be collected</p>
+                <p className="q-figure mt-3.5 text-2xl font-semibold tabular-nums tracking-tight text-ink">{quoteCount.toLocaleString()}</p>
+                <p className="q-caption mt-2.5">Not counted as invoice balance waiting to be collected</p>
               </div>
 
-              <div className="rounded-3xl border border-slate-200/70 bg-white/[0.97] p-5 shadow-card backdrop-blur-[2px] sm:p-6">
+              <div className="q-card p-5 sm:p-6">
                 <p className="q-section-label text-slate-500">Top client · waiting to be collected</p>
                 {topClientByBalanceDue && topClientName ? (
                   <>
@@ -504,7 +504,7 @@ export default async function DashboardPage() {
                 )}
               </div>
 
-              <div className="rounded-3xl border border-slate-200/70 bg-white/[0.97] p-5 shadow-card backdrop-blur-[2px] sm:p-6">
+              <div className="q-card p-5 sm:p-6">
                 <p className="q-section-label text-slate-500">Latest confirmed payment</p>
                 {lastPayment ? (
                   <>
@@ -539,7 +539,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid gap-5 lg:grid-cols-2 mt-1">
               <OperationsChecklist
                 title="Payment method readiness"
                 description="What clients see on your public invoice pages."
@@ -627,7 +627,7 @@ export default async function DashboardPage() {
               />
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
               <DashboardAreaChart
                 data={trendData}
                 hasTrendData={hasTrendData}
@@ -636,7 +636,7 @@ export default async function DashboardPage() {
               />
 
               <div className="grid gap-5">
-                <section className="rounded-3xl border border-slate-200/70 bg-white/[0.97] p-6 shadow-card backdrop-blur-[2px] sm:p-7">
+                <section className="q-card p-6 sm:p-7">
                   <div className="mb-5 flex items-center justify-between gap-3">
                     <div>
                       <p className="q-section-label text-cedar">Proofs</p>
@@ -682,7 +682,7 @@ export default async function DashboardPage() {
                   </div>
                 </section>
 
-                <section className="rounded-3xl border border-slate-200/70 bg-white/[0.97] p-6 shadow-card backdrop-blur-[2px] sm:p-7">
+                <section className="q-card p-6 sm:p-7">
                   <div className="mb-5 flex items-center justify-between gap-3">
                     <div>
                       <p className="q-section-label text-cedar">Profile</p>

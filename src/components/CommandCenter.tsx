@@ -169,7 +169,7 @@ function ShortcutsHelpDialog({ open, onClose }: { open: boolean; onClose: () => 
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm print:hidden"
+          className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/25 px-4 py-6 backdrop-blur-[12px] print:hidden"
           initial={reduceMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={reduceMotion ? undefined : { opacity: 0 }}
@@ -181,11 +181,11 @@ function ShortcutsHelpDialog({ open, onClose }: { open: boolean; onClose: () => 
             aria-labelledby="command-shortcuts-title"
             aria-modal="true"
             role="dialog"
-            className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.20)] backdrop-blur-xl"
-            initial={reduceMotion ? false : { y: 16, scale: 0.98, opacity: 0 }}
+            className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/60 bg-white/[0.97] shadow-[var(--q-shadow-modal)] backdrop-blur-2xl"
+            initial={reduceMotion ? false : { y: 12, scale: 0.97, opacity: 0 }}
             animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={reduceMotion ? undefined : { y: 12, scale: 0.98, opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            exit={reduceMotion ? undefined : { y: 8, scale: 0.98, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.34, 1.42, 0.64, 1] }}
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
               <div>
@@ -493,7 +493,8 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
       <button
         aria-keyshortcuts="Control+K Meta+K"
         aria-label="Open command center"
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] right-4 z-50 inline-flex h-11 items-center gap-2 rounded-full border border-white/80 bg-white/90 px-3 text-sm font-bold text-ink shadow-[0_14px_42px_rgba(15,23,42,0.14)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cedar/25 hover:text-cedar hover:shadow-[0_18px_52px_rgba(15,23,42,0.18)] focus:outline-none focus:ring-2 focus:ring-cedar/30 sm:bottom-5 sm:px-4 print:hidden"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] right-4 z-50 inline-flex h-11 items-center gap-2 rounded-full border border-white/70 bg-white/90 px-3 text-sm font-semibold text-ink backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cedar/20 hover:text-cedar focus:outline-none focus:ring-2 focus:ring-cedar/30 sm:bottom-5 sm:px-4 print:hidden"
+        style={{ boxShadow: "var(--q-shadow-float)", transitionDuration: "var(--q-duration-normal)", transitionTimingFunction: "var(--q-ease)" }}
         onClick={() => {
           setSelectedIndex(0);
           setOpen(true);
@@ -511,7 +512,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
       <AnimatePresence>
         {open ? (
           <motion.div
-            className="fixed inset-0 z-[80] bg-slate-950/30 px-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-sm sm:px-4 sm:pt-[12vh] print:hidden"
+            className="fixed inset-0 z-[80] bg-slate-950/20 px-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-[12px] sm:px-4 sm:pt-[12vh] print:hidden"
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
@@ -524,14 +525,15 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
               aria-label="Command center"
               aria-modal="true"
               role="dialog"
-              className="mx-auto flex max-h-[min(760px,calc(100dvh-2rem))] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/75 bg-white/[0.96] shadow-[0_28px_90px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
-              initial={reduceMotion ? false : { y: 16, scale: 0.98, opacity: 0 }}
+              className="mx-auto flex max-h-[min(760px,calc(100dvh-2rem))] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/[0.97] backdrop-blur-2xl"
+              style={{ boxShadow: "var(--q-shadow-modal)" }}
+              initial={reduceMotion ? false : { y: 12, scale: 0.97, opacity: 0 }}
               animate={{ y: 0, scale: 1, opacity: 1 }}
-              exit={reduceMotion ? undefined : { y: 12, scale: 0.98, opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              exit={reduceMotion ? undefined : { y: 8, scale: 0.98, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.34, 1.42, 0.64, 1] }}
               onKeyDown={handlePaletteKeyDown}
             >
-              <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-3 border-b border-slate-100/60 px-4 py-3 sm:px-5">
                 <Search className="h-5 w-5 text-slate-400" aria-hidden="true" />
                 <input
                   ref={inputRef}
@@ -539,7 +541,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                   aria-controls="command-results"
                   aria-expanded="true"
                   aria-label="Search Qaffel commands and records"
-                  className="h-12 min-w-0 flex-1 bg-transparent text-base font-semibold text-ink outline-none placeholder:text-slate-400"
+                  className="h-14 min-w-0 flex-1 bg-transparent text-base font-semibold text-ink outline-none placeholder:text-slate-400 placeholder:transition-opacity placeholder:duration-q focus:placeholder:opacity-40"
                   data-command-focusable
                   onChange={(event) => handleQueryChange(event.target.value)}
                   placeholder="Search invoices, clients, proofs, recoveries..."
@@ -588,11 +590,15 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                                 id={`command-entry-${absoluteIndex}`}
                                 aria-selected={selected}
                                 className={cn(
-                                  "group flex min-h-[64px] w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition",
+                                  "group flex min-h-[64px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left",
                                   selected
-                                    ? "bg-cedar text-white shadow-[0_12px_36px_rgba(15,100,88,0.22)]"
-                                    : "bg-white text-ink hover:bg-slate-50"
+                                    ? "bg-cedar text-white"
+                                    : "bg-white text-ink hover:bg-slate-50/70"
                                 )}
+                                style={{
+                                  boxShadow: selected ? "0 4px 16px -6px rgba(17, 100, 102, 0.35)" : undefined,
+                                  transition: `background-color var(--q-duration-fast) var(--q-ease), box-shadow var(--q-duration-fast) var(--q-ease)`
+                                }}
                                 data-command-focusable
                                 onMouseEnter={() => setSelectedIndex(Math.max(0, absoluteIndex))}
                                 onClick={() => runItem(item)}
@@ -659,7 +665,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                 )}
               </div>
 
-              <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+              <div className="border-t border-slate-100/50 bg-slate-50/50 px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />

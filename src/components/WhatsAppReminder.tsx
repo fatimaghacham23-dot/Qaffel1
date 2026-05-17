@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface WhatsAppReminderProps {
@@ -23,6 +23,13 @@ export function WhatsAppReminder({
   invoiceStatus,
 }: WhatsAppReminderProps) {
   const [isCopied, setIsCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const allowedStatuses = ["unpaid", "overdue", "partial", "sent"];
   if (!allowedStatuses.includes(invoiceStatus)) {
@@ -61,7 +68,8 @@ export function WhatsAppReminder({
     navigator.clipboard.writeText(message);
     toast.success("Reminder message copied to clipboard");
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setIsCopied(false), 2000);
   };
 
   const handleCopyLink = () => {

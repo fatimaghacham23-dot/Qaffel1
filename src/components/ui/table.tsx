@@ -8,7 +8,7 @@ function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) 
 }
 
 function TableHeader({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn("bg-slate-50/95 [&_tr]:border-b", className)} {...props} />;
+  return <thead className={cn("sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm [&_tr]:border-b [&_tr]:border-slate-100/60", className)} {...props} />;
 }
 
 function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
@@ -16,24 +16,24 @@ function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTableSectio
 }
 
 function TableFooter({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <tfoot className={cn("border-t bg-slate-50 font-medium", className)} {...props} />;
+  return <tfoot className={cn("border-t bg-slate-50/80 font-medium", className)} {...props} />;
 }
 
 function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={cn("border-b border-slate-100/90 transition-[background-color,box-shadow] duration-q hover:bg-slate-50/80", className)} {...props} />;
+  return <tr className={cn("border-b border-slate-100/60 transition-[background-color,box-shadow] duration-q hover:bg-slate-50/40", className)} {...props} />;
 }
 
 function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
-      className={cn("h-11 px-3 text-left align-middle text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500", className)}
+      className={cn("h-11 px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400/80", className)}
       {...props}
     />
   );
 }
 
 function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("px-3 py-3.5 align-middle", className)} {...props} />;
+  return <td className={cn("px-4 py-4 align-middle", className)} {...props} />;
 }
 
 function TableCaption({ className, ...props }: React.HTMLAttributes<HTMLTableCaptionElement>) {

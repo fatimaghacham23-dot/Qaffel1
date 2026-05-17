@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getWorkspaceContext } from "@/lib/get-workspace";
 import { requireUser } from "@/lib/supabase/server";
 import type { ClientNoteCategory, InvoiceNoteCategory } from "@/lib/workspace-memory";
 
@@ -23,6 +24,10 @@ const INVOICE_NOTE_CATEGORIES = new Set<InvoiceNoteCategory>([
   "revision",
   "milestone",
   "handoff",
+  "assignment",
+  "finance",
+  "recovery",
+  "operational",
   "general"
 ]);
 
@@ -31,6 +36,7 @@ const TEMPLATE_CATEGORIES = new Set<TemplateCategory>(["reminder", "recovery", "
 
 export async function addClientWorkspaceNoteAction(formData: FormData) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
   const clientId = text(formData, "client_id");
   const body = text(formData, "body");
   const category = text(formData, "category") as ClientNoteCategory;
@@ -41,6 +47,7 @@ export async function addClientWorkspaceNoteAction(formData: FormData) {
 
   const { error } = await supabase.from("client_workspace_notes").insert({
     user_id: user.id,
+    workspace_id: ctx.workspaceId,
     client_id: clientId,
     category,
     body,
@@ -118,6 +125,7 @@ export async function togglePinClientWorkspaceNoteAction(formData: FormData) {
 
 export async function addInvoiceWorkspaceNoteAction(formData: FormData) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
   const invoiceId = text(formData, "invoice_id");
   const body = text(formData, "body");
   const category = text(formData, "category") as InvoiceNoteCategory;
@@ -128,6 +136,7 @@ export async function addInvoiceWorkspaceNoteAction(formData: FormData) {
 
   const { error } = await supabase.from("invoice_workspace_notes").insert({
     user_id: user.id,
+    workspace_id: ctx.workspaceId,
     invoice_id: invoiceId,
     category,
     body,
@@ -216,6 +225,7 @@ export async function togglePinInvoiceWorkspaceNoteAction(formData: FormData) {
 
 export async function saveWorkspaceMessageTemplateAction(formData: FormData) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
   const label = text(formData, "label");
   const body = text(formData, "body");
   const category = text(formData, "category") as TemplateCategory;
@@ -224,6 +234,7 @@ export async function saveWorkspaceMessageTemplateAction(formData: FormData) {
 
   const { error } = await supabase.from("workspace_message_templates").insert({
     user_id: user.id,
+    workspace_id: ctx.workspaceId,
     label,
     body,
     category,

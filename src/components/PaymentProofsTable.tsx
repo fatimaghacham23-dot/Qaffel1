@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Ellipsis, FileText, Keyboard, RotateCcw, Search, XCircle } from "lucide-react";
 import { reviewProofAction, voidPaymentAction } from "@/app/actions";
+import { assignOperationalWorkAction } from "@/app/assignment-actions";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,17 @@ import { getPendingProofUrgency } from "@/lib/operations";
 import { parseStoredAiReview } from "@/lib/ai-proof-verification";
 import { aiQueueSortKey } from "@/lib/ai-proof-review-ui";
 import { buildDuplicateProofMap } from "@/lib/workflow-assistant";
+import {
+  ASSIGNMENT_PRIORITY_LABELS,
+  assignmentInitials,
+  formatAssignee,
+  isOpenAssignment,
+  ownershipLine,
+  sortAssignments,
+  type AssignmentMemberOption,
+  type OperationalAssignmentRow
+} from "@/lib/assignments";
+import { ROLE_LABELS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { shortDate, money, formatPaymentMethod } from "@/lib/format";
 
@@ -57,10 +69,13 @@ export type PaymentProofTableItem = {
       name?: string | null;
     } | null;
   } | null;
+  assignments?: OperationalAssignmentRow[];
 };
 
 interface PaymentProofsTableProps {
   initialProofs: PaymentProofTableItem[];
+  assignmentMembers?: AssignmentMemberOption[];
+  canManageAssignments?: boolean;
 }
 
 const statusOptions: Array<{ value: ProofStatusFilter; label: string }> = [
@@ -208,6 +223,76 @@ function QueueKbd({ children }: { children: React.ReactNode }) {
     <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-bold text-slate-500">
       {children}
     </kbd>
+  );
+}
+
+function ProofAssignmentBadges({ assignments }: { assignments?: OperationalAssignmentRow[] }) {
+  const open = (assignments || []).filter((assignment) => isOpenAssignment(assignment.status)).sort(sortAssignments);
+  if (!open.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {open.slice(0, 2).map((assignment) => (
+        <span
+          key={assignment.id}
+          className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+          title={`${ownershipLine(assignment)} - ${ASSIGNMENT_PRIORITY_LABELS[assignment.priority]}`}
+        >
+          <span className="grid h-4 w-4 place-items-center rounded-full bg-slate-100 text-[8px] text-slate-600">
+            {assignmentInitials(assignment)}
+          </span>
+          <span className="truncate">{formatAssignee(assignment)}</span>
+        </span>
+      ))}
+      {open.length > 2 ? (
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+          +{open.length - 2}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function ProofAssignmentForm({
+  proof,
+  members,
+  canManage
+}: {
+  proof: PaymentProofTableItem;
+  members: AssignmentMemberOption[];
+  canManage: boolean;
+}) {
+  if (!canManage || proof.status !== "pending") return null;
+  return (
+    <form action={assignOperationalWorkAction} className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+      <input name="target_type" type="hidden" value="proof" />
+      <input name="target_id" type="hidden" value={proof.id} />
+      <input name="assignment_type" type="hidden" value="reviewer" />
+      <input name="priority" type="hidden" value="normal" />
+      <select
+        aria-label="Assign proof reviewer"
+        className="h-8 max-w-[180px] rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-medium text-slate-600 outline-none focus:border-cedar/50"
+        name="assignee"
+        defaultValue={members[0] ? `user:${members[0].userId}` : "role:reviewer"}
+      >
+        {members.length > 0 ? (
+          <optgroup label="People">
+            {members.map((member) => (
+              <option key={member.userId} value={`user:${member.userId}`}>
+                {member.name} ({ROLE_LABELS[member.role]})
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        <optgroup label="Roles">
+          <option value="role:reviewer">Reviewer</option>
+          <option value="role:finance">Finance</option>
+          <option value="role:operations">Operations</option>
+        </optgroup>
+      </select>
+      <button className="btn btn-secondary h-8 px-2 text-[11px]" type="submit">
+        Assign
+      </button>
+    </form>
   );
 }
 
@@ -391,13 +476,17 @@ function ProofMobileCard({
   active,
   selected,
   duplicateCount,
-  onSelectedChange
+  onSelectedChange,
+  assignmentMembers,
+  canManageAssignments
 }: {
   proof: PaymentProofTableItem;
   active: boolean;
   selected: boolean;
   duplicateCount: number;
   onSelectedChange: (checked: boolean) => void;
+  assignmentMembers: AssignmentMemberOption[];
+  canManageAssignments: boolean;
 }) {
   const invoiceHref = proof.invoices?.id ? `/invoices/${proof.invoices.id}` : "#";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -417,6 +506,7 @@ function ProofMobileCard({
             <span className="block truncate text-xs font-normal text-slate-500">{proof.invoices?.title || "Untitled invoice"}</span>
           </Link>
           <p className="mt-1 truncate text-xs text-slate-500">{proof.invoices?.clients?.name || "No client"}</p>
+          <ProofAssignmentBadges assignments={proof.assignments} />
         </div>
         <ProofActions proof={proof} />
       </div>
@@ -436,6 +526,7 @@ function ProofMobileCard({
             <DuplicateProofBadge count={duplicateCount} />
             <AmountAttentionBadge proof={proof} />
             <ProofStatusMessage proof={proof} />
+            <ProofAssignmentForm proof={proof} members={assignmentMembers} canManage={canManageAssignments} />
           </div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
@@ -473,7 +564,11 @@ function ProofMobileCard({
   );
 }
 
-export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
+export function PaymentProofsTable({
+  initialProofs,
+  assignmentMembers = [],
+  canManageAssignments = false
+}: PaymentProofsTableProps) {
   const router = useRouter();
   const queueRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -846,6 +941,8 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
                 selected={selectedProofIds.includes(proof.id)}
                 duplicateCount={duplicateProofCounts.get(proof.id) || 0}
                 onSelectedChange={(checked) => toggleSelected(proof.id, checked)}
+                assignmentMembers={assignmentMembers}
+                canManageAssignments={canManageAssignments}
               />
             ))
           )}
@@ -930,6 +1027,7 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
                           <span className="block truncate">{proof.invoices?.invoice_number || "Invoice"}</span>
                           <span className="block truncate text-xs font-normal text-slate-500">{proof.invoices?.title || "Untitled invoice"}</span>
                         </Link>
+                        <ProofAssignmentBadges assignments={proof.assignments} />
                       </TableCell>
                       <TableCell className="max-w-0">
                         <span className="block truncate text-sm font-medium text-slate-700">
@@ -961,6 +1059,7 @@ export function PaymentProofsTable({ initialProofs }: PaymentProofsTableProps) {
                           <AmountAttentionBadge proof={proof} />
                         </div>
                         <ProofStatusMessage proof={proof} />
+                        <ProofAssignmentForm proof={proof} members={assignmentMembers} canManage={canManageAssignments} />
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <StatusBadge status={proof.invoices?.status || "unknown"} size="sm" />

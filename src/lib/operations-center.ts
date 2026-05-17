@@ -198,13 +198,20 @@ const TIMELINE_TYPES = new Set([
   "payment_link_extended",
   "pay_link_regenerated",
   "invoice_paid",
-  "invoice_partial"
+  "invoice_partial",
+  "assignment_created",
+  "assignment_reassigned",
+  "assignment_status_changed",
+  "assignment_completed",
+  "assignment_note_added",
+  "handoff_completed"
 ]);
 
 function timelineTone(eventType: string): OpsTimelineItem["tone"] {
   if (eventType.includes("proof") || eventType === "manual_payment") return "payment";
   if (eventType.includes("deposit") || eventType === "payment_voided") return "risk";
   if (eventType === "reminder_copied") return "reminder";
+  if (eventType.includes("assignment") || eventType.includes("handoff")) return "neutral";
   if (eventType === "receipt_viewed") return "receipt";
   if (eventType.includes("client_")) return "neutral";
   return "neutral";

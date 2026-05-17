@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { type CommandItem, sortCommandItems } from "@/lib/command-center";
 import { money, shortDate } from "@/lib/format";
+import { getWorkspaceContext } from "@/lib/get-workspace";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,17 @@ type TemplateSearchRow = {
   label: string;
   body: string;
   category: string;
+};
+
+type AssignmentNoteSearchRow = {
+  id: string;
+  note_type: string;
+  body: string;
+  assignment_id: string;
+  operational_assignments?:
+    | { target_type?: string | null; target_id?: string | null; assignment_type?: string | null }
+    | Array<{ target_type?: string | null; target_id?: string | null; assignment_type?: string | null }>
+    | null;
 };
 
 type ProofSearchRow = {
@@ -201,6 +213,20 @@ function templateToItem(row: TemplateSearchRow): CommandItem {
   };
 }
 
+function assignmentNoteToItem(row: AssignmentNoteSearchRow): CommandItem {
+  const assignment = firstRelated(row.operational_assignments);
+  return {
+    id: `anote:${row.id}`,
+    type: "memory",
+    title: `Assignment note - ${assignment?.assignment_type || "work item"}`,
+    subtitle: [row.note_type, row.body.slice(0, 120)].filter(Boolean).join(" - "),
+    href: "/inbox",
+    badge: "Assignment",
+    group: "Memory & notes",
+    keywords: [row.body, row.note_type, assignment?.target_type || "", assignment?.assignment_type || ""]
+  };
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -212,45 +238,52 @@ export async function GET(request: NextRequest) {
   }
 
   const query = (request.nextUrl.searchParams.get("q") || "").trim().slice(0, 80);
+  const ctx = await getWorkspaceContext();
 
-  const [{ data: invoiceRows }, { data: clientRows }, { data: proofRows }, { data: clientNoteRows }, { data: invoiceNoteRows }, { data: templateRows }] =
+  const [{ data: invoiceRows }, { data: clientRows }, { data: proofRows }, { data: clientNoteRows }, { data: invoiceNoteRows }, { data: templateRows }, { data: assignmentNoteRows }] =
     await Promise.all([
     supabase
       .from("invoices")
       .select("id, invoice_number, title, status, document_type, due_date, amount_usd, amount_lbp, currency, created_at, clients(name)")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(120),
     supabase
       .from("clients")
       .select("id, name, email, phone, created_at")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(120),
     supabase
       .from("payment_proofs")
-      .select("id, status, method, amount_usd, amount_lbp, uploaded_at, invoices!inner(id, title, invoice_number, status, user_id, clients(name))")
-      .eq("invoices.user_id", user.id)
+      .select("id, status, method, amount_usd, amount_lbp, uploaded_at, invoices!inner(id, title, invoice_number, status, workspace_id, clients(name))")
+      .eq("invoices.workspace_id", ctx.workspaceId)
       .order("uploaded_at", { ascending: false })
       .limit(120),
     supabase
       .from("client_workspace_notes")
       .select("id, category, body, client_id, clients(name)")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(80),
     supabase
       .from("invoice_workspace_notes")
-      .select("id, category, body, invoice_id, invoices!inner(id, title, invoice_number, user_id)")
-      .eq("invoices.user_id", user.id)
+      .select("id, category, body, invoice_id, invoices!inner(id, title, invoice_number, workspace_id)")
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(80),
     supabase
       .from("workspace_message_templates")
       .select("id, label, body, category")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("last_used_at", { ascending: false })
-      .limit(60)
+      .limit(60),
+    supabase
+      .from("assignment_notes")
+      .select("id, note_type, body, assignment_id, operational_assignments!inner(target_type, target_id, assignment_type, workspace_id)")
+      .eq("workspace_id", ctx.workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(80)
     ]);
 
   const invoiceItems = ((invoiceRows || []) as InvoiceSearchRow[])
@@ -319,8 +352,17 @@ export async function GET(request: NextRequest) {
     .slice(0, query.length < 2 ? 4 : 10)
     .map(templateToItem);
 
+  const assignmentNoteItems = ((assignmentNoteRows || []) as AssignmentNoteSearchRow[])
+    .filter((row) => {
+      const assignment = firstRelated(row.operational_assignments);
+      const haystack = searchText([row.body, row.note_type, assignment?.target_type, assignment?.assignment_type]);
+      return query.length < 2 ? true : matchesQuery(haystack, query);
+    })
+    .slice(0, query.length < 2 ? 4 : 10)
+    .map(assignmentNoteToItem);
+
   const items = sortCommandItems(
-    [...invoiceItems, ...clientItems, ...proofItems, ...recoveryItems, ...clientNoteItems, ...invoiceNoteItems, ...templateItems],
+    [...invoiceItems, ...clientItems, ...proofItems, ...recoveryItems, ...clientNoteItems, ...invoiceNoteItems, ...templateItems, ...assignmentNoteItems],
     query
   ).slice(0, 32);
 

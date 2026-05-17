@@ -40,7 +40,11 @@ import { invoiceStatuses } from "@/lib/types";
 import { PaymentPlanEditor } from "@/components/PaymentPlanEditor";
 import { InvoiceWorkMemoryPanel } from "@/components/workspace/InvoiceWorkMemoryPanel";
 import { WorkspaceMessageTemplatesCard } from "@/components/workspace/WorkspaceMessageTemplatesCard";
+import { AssignmentInlineBadges, OperationalAssignmentPanel } from "@/components/OperationalAssignmentPanel";
+import { getAssignmentMembers, getAssignmentsForTarget } from "@/lib/assignment-data";
 import { parsePaymentPlan } from "@/lib/payment-plan";
+import { getWorkspaceContext } from "@/lib/get-workspace";
+import { hasPermission } from "@/lib/permissions";
 import {
   computeRecoveryForInvoice,
   recoveryNextActionLabel,
@@ -99,7 +103,8 @@ export default async function InvoiceDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
 
   const [
     { data: invoice },
@@ -112,8 +117,8 @@ export default async function InvoiceDetailPage({
     { data: invoiceWorkNotes },
     { data: workspaceTemplates }
   ] = await Promise.all([
-    supabase.from("invoices").select("*, clients(id, name, phone, email)").eq("id", id).eq("user_id", user.id).maybeSingle(),
-    supabase.from("clients").select("id, name, phone, email").eq("user_id", user.id).order("name", { ascending: true }),
+    supabase.from("invoices").select("*, clients(id, name, phone, email)").eq("id", id).maybeSingle(),
+    supabase.from("clients").select("id, name, phone, email").eq("workspace_id", ctx.workspaceId).order("name", { ascending: true }),
     supabase
       .from("payment_proofs")
       .select("*")
@@ -124,10 +129,10 @@ export default async function InvoiceDetailPage({
       .select("*")
       .eq("invoice_id", id)
       .order("created_at", { ascending: false }),
-    supabase.from("payment_methods").select("id, label, instructions").eq("user_id", user.id).eq("is_active", true).order("created_at", { ascending: true }),
+    supabase.from("payment_methods").select("id, label, instructions").eq("workspace_id", ctx.workspaceId).eq("is_active", true).order("created_at", { ascending: true }),
     supabase
       .from("invoice_events")
-      .select("created_at, metadata")
+      .select("created_at, metadata, actor_name, actor_role")
       .eq("invoice_id", id)
       .eq("event_type", "reminder_copied")
       .order("created_at", { ascending: false })
@@ -138,7 +143,7 @@ export default async function InvoiceDetailPage({
       .select(
         "id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, exchange_rate_lbp_per_usd, payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
       )
-      .eq("user_id", user.id),
+      .eq("workspace_id", ctx.workspaceId),
     supabase
       .from("invoice_workspace_notes")
       .select("id, invoice_id, category, body, is_pinned, created_at, updated_at")
@@ -148,7 +153,7 @@ export default async function InvoiceDetailPage({
     supabase
       .from("workspace_message_templates")
       .select("id, category, label, body, is_favorite, use_count, last_used_at, created_at")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("is_favorite", { ascending: false })
       .order("last_used_at", { ascending: false })
       .limit(40)
@@ -169,6 +174,17 @@ export default async function InvoiceDetailPage({
       </AppShell>
     );
   }
+
+  const assignmentMembers = await getAssignmentMembers(supabase, ctx.workspaceId);
+  const invoiceAssignments = await getAssignmentsForTarget({
+    supabase,
+    workspaceId: ctx.workspaceId,
+    targetType: "invoice",
+    targetId: invoice.id,
+    members: assignmentMembers
+  });
+  const canManageAssignments = hasPermission(ctx.role, "assignments.manage");
+  const canWorkAssignments = hasPermission(ctx.role, "assignments.work");
 
   const proofsWithSignedUrls = await Promise.all(
     (proofs || []).map(async (proof) => {
@@ -417,6 +433,7 @@ export default async function InvoiceDetailPage({
                 <span>{invoice.due_date ? `Due ${shortDate(invoice.due_date)}` : "No due date"}</span>
               </div>
               <InvoicePriorityBadges flags={priorityFlags} className="mt-4" />
+              <AssignmentInlineBadges assignments={invoiceAssignments} />
               <div className="mt-4 flex flex-wrap gap-2">
                 {statusChips.map((chip) => (
                   <StatusChip key={chip.label} tone={chip.tone} label={chip.label} />
@@ -570,6 +587,18 @@ export default async function InvoiceDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+          <OperationalAssignmentPanel
+            targetType="invoice"
+            targetId={invoice.id}
+            assignments={invoiceAssignments}
+            members={assignmentMembers}
+            canManage={canManageAssignments}
+            canWork={canWorkAssignments}
+            allowedTypes={["operations_owner", "finance_owner", "follow_up_owner", "payment_plan_owner", "approval_owner"]}
+            title={`${nounTitle} ownership`}
+            description="Keep the person or team responsible for review, finance, follow-up, and payment-plan continuity visible."
+          />
+
           {!isQuote && recovery ? (
             <section className="panel border-indigo-100 bg-indigo-50/40">
               <div className="flex flex-wrap items-start justify-between gap-3">

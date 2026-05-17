@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { assignOperationalWorkAction } from "@/app/assignment-actions";
+import { AssignmentInlineBadges } from "@/components/OperationalAssignmentPanel";
 import { SettingsPageHeader } from "@/components/SettingsPageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getAssignmentMembers, getAssignmentsForTargets } from "@/lib/assignment-data";
 import { money, shortDate } from "@/lib/format";
+import { getWorkspaceContext } from "@/lib/get-workspace";
+import { hasPermission, ROLE_LABELS } from "@/lib/permissions";
 import { parsePaymentPlan } from "@/lib/payment-plan";
 import { paymentPlanProgress } from "@/lib/payment-plan";
 import {
@@ -33,7 +38,8 @@ function bucketTitle(b: RecoveryComputation["bucket"]) {
 }
 
 export default async function RecoveriesPage() {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
   const anchor = new Date();
   anchor.setUTCDate(anchor.getUTCDate() - 120);
   const since = anchor.toISOString();
@@ -44,12 +50,12 @@ export default async function RecoveriesPage() {
       .select(
         "id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, invoice_number, title, public_token, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, exchange_rate_lbp_per_usd, payment_plan, clients(name, phone, email), payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
       )
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("due_date", { ascending: true }),
     supabase
       .from("invoice_events")
       .select("invoice_id, event_type, created_at, metadata")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(4000)
@@ -99,6 +105,15 @@ export default async function RecoveriesPage() {
   };
 
   const invById = new Map(rows.map((i) => [i.id, i]));
+  const assignmentMembers = await getAssignmentMembers(supabase, ctx.workspaceId);
+  const recoveryAssignmentsByInvoice = await getAssignmentsForTargets({
+    supabase,
+    workspaceId: ctx.workspaceId,
+    targetType: "recovery",
+    targetIds: rows.map((row) => row.id),
+    members: assignmentMembers
+  });
+  const canManageAssignments = hasPermission(ctx.role, "assignments.manage");
 
   return (
     <AppShell>
@@ -112,29 +127,29 @@ export default async function RecoveriesPage() {
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="q-surface p-4">
-          <p className="text-[10px] font-bold uppercase text-slate-500">Overdue recoverable (USD)</p>
-          <p className="mt-1 text-2xl font-bold text-ink">{money(kpis.overdueRecoverableUsd, "USD")}</p>
+      <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="q-surface p-5">
+          <p className="q-section-label">Overdue recoverable (USD)</p>
+          <p className="q-kpi-secondary mt-2">{money(kpis.overdueRecoverableUsd, "USD")}</p>
         </div>
-        <div className="q-surface p-4">
-          <p className="text-[10px] font-bold uppercase text-slate-500">Overdue recoverable (LBP)</p>
-          <p className="mt-1 text-2xl font-bold text-ink">{money(kpis.overdueRecoverableLbp, "LBP")}</p>
+        <div className="q-surface p-5">
+          <p className="q-section-label">Overdue recoverable (LBP)</p>
+          <p className="q-kpi-secondary mt-2">{money(kpis.overdueRecoverableLbp, "LBP")}</p>
         </div>
-        <div className="q-surface p-4">
-          <p className="text-[10px] font-bold uppercase text-slate-500">Avg days overdue (this list)</p>
-          <p className="mt-1 text-2xl font-bold text-ink">{kpis.avgDaysOverdue}</p>
+        <div className="q-surface p-5">
+          <p className="q-section-label">Avg days overdue (this list)</p>
+          <p className="q-kpi-secondary mt-2">{kpis.avgDaysOverdue}</p>
         </div>
-        <div className="q-surface p-4">
-          <p className="text-[10px] font-bold uppercase text-slate-500">Reminder copies (60d, listed)</p>
-          <p className="mt-1 text-2xl font-bold text-ink">{kpis.remindersLast60d}</p>
-          <p className="mt-1 text-xs text-slate-500">{kpis.partialCount} partial · {kpis.criticalCount} critical tier</p>
+        <div className="q-surface p-5">
+          <p className="q-section-label">Reminder copies (60d, listed)</p>
+          <p className="q-kpi-secondary mt-2">{kpis.remindersLast60d}</p>
+          <p className="q-caption mt-2">{kpis.partialCount} partial · {kpis.criticalCount} critical tier</p>
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+      <div className="mb-7 grid gap-5 lg:grid-cols-2">
         <section className="q-surface p-5">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Recovery funnel (buckets)</h2>
+          <h2 className="q-section-label">Recovery funnel (buckets)</h2>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex justify-between">
               <span>Recently overdue</span>
@@ -156,7 +171,7 @@ export default async function RecoveriesPage() {
         </section>
 
         <section className="q-surface p-5">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Reminder stages → payments within 7d</h2>
+          <h2 className="q-section-label">Reminder stages → payments within 7d</h2>
           <p className="mt-1 text-xs text-slate-500">
             Counts proof acceptance or manual payment recorded after a reminder copy on the same invoice (observed order
             only).
@@ -183,7 +198,7 @@ export default async function RecoveriesPage() {
         if (!list.length) return null;
         return (
           <section key={bucket} className="mb-8">
-            <h2 className="mb-3 text-lg font-bold text-ink">{bucketTitle(bucket)}</h2>
+            <h2 className="q-headline mb-4">{bucketTitle(bucket)}</h2>
             <div className="grid gap-4">
               {list.map((c) => {
                 const inv = invById.get(c.invoiceId);
@@ -194,6 +209,7 @@ export default async function RecoveriesPage() {
                 const plan = parsePaymentPlan(inv.payment_plan);
                 const planProg = plan ? paymentPlanProgress(plan) : null;
                 const proofs = inv.payment_proofs || [];
+                const recoveryAssignments = recoveryAssignmentsByInvoice.get(inv.id) || [];
                 const pendingProofs = proofs.filter((p) => (p.status || "").toLowerCase() === "pending").length;
                 const acceptedProofs = proofs.filter((p) => (p.status || "") === "accepted").length;
                 const recStatus = reconcileInvoiceStatus(inv, proofs.map((p) => ({ status: p.status || "", amount_usd: p.amount_usd, amount_lbp: p.amount_lbp })));
@@ -201,7 +217,7 @@ export default async function RecoveriesPage() {
                 return (
                   <div
                     key={c.invoiceId}
-                    className="q-surface-hover overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-card"
+                    className="q-surface-hover overflow-hidden rounded-2xl border border-slate-200/60 bg-white/95 shadow-card"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/80 p-4">
                       <div className="min-w-0">
@@ -214,6 +230,7 @@ export default async function RecoveriesPage() {
                           {inv.title}
                         </p>
                         <p className="mt-1 text-sm text-slate-600">{inv.clients?.name || "No client"}</p>
+                        <AssignmentInlineBadges assignments={recoveryAssignments} />
                       </div>
                       <div className="text-right text-sm">
                         <p className="font-bold text-ink">{overdueLabel}</p>
@@ -277,6 +294,32 @@ export default async function RecoveriesPage() {
                           <p className="mt-2 text-xs text-amber-800">Client viewed the receipt page after the last recorded reminder copy.</p>
                         ) : null}
                         <p className="mt-2 text-[11px] text-slate-500">Reconciled status: {recStatus}</p>
+                        {canManageAssignments ? (
+                          <form action={assignOperationalWorkAction} className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                            <input name="target_type" type="hidden" value="recovery" />
+                            <input name="target_id" type="hidden" value={inv.id} />
+                            <input name="assignment_type" type="hidden" value="recovery_owner" />
+                            <input name="priority" type="hidden" value={c.tier === "critical" ? "urgent" : c.tier === "recovery_risk" ? "high" : "normal"} />
+                            <select className="field h-9 max-w-[220px] text-xs" name="assignee" defaultValue={assignmentMembers[0] ? `user:${assignmentMembers[0].userId}` : "role:operations"}>
+                              {assignmentMembers.length > 0 ? (
+                                <optgroup label="People">
+                                  {assignmentMembers.map((member) => (
+                                    <option key={member.userId} value={`user:${member.userId}`}>
+                                      {member.name} ({ROLE_LABELS[member.role]})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                              <optgroup label="Roles">
+                                <option value="role:operations">Operations</option>
+                                <option value="role:finance">Finance</option>
+                              </optgroup>
+                            </select>
+                            <button className="btn btn-secondary h-9 px-3 text-xs" type="submit">
+                              Assign recovery
+                            </button>
+                          </form>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -288,9 +331,9 @@ export default async function RecoveriesPage() {
       })}
 
       {computations.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-10 text-center text-slate-600">
+        <div className="rounded-2xl border border-slate-200/60 bg-slate-50/70 p-12 text-center text-slate-600">
           <p className="font-semibold text-ink">No overdue balances right now</p>
-          <p className="mt-2 text-sm">When an invoice is past due with an open balance, it will appear here with recovery context.</p>
+          <p className="mt-2.5 text-sm">When an invoice is past due with an open balance, it will appear here with recovery context.</p>
         </div>
       ) : null}
     </AppShell>
