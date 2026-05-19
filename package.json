@@ -32,6 +32,7 @@
     "react-dom": "^18.3.1",
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
+    "stripe": "^22.1.1",
     "tailwind-merge": "^3.6.0",
     "tweakpane": "^4.0.5"
   },

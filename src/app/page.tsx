@@ -36,7 +36,7 @@ export default async function HomePage() {
   const supabase = await createClient();
   const {
     data: { user }
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   if (user) {
     redirect("/dashboard");
   }

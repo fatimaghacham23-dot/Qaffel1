@@ -34,7 +34,7 @@ export async function requireUser() {
   const supabase = await createClient();
   const {
     data: { user }
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
   if (!user) {
     redirect("/login?session=required");

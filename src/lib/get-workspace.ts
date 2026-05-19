@@ -66,7 +66,9 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext> => 
  */
 export const getOptionalWorkspaceContext = cache(async (): Promise<WorkspaceContext | null> => {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
   if (!user) return null;
 

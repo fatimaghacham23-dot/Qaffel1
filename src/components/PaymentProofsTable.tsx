@@ -366,9 +366,12 @@ function isWhishOrOmtMethod(method?: string | null) {
 
 function ProofActions({ proof }: { proof: PaymentProofTableItem }) {
   const [isPending, startTransition] = useTransition();
+  const actionLockRef = useRef(false);
   const invoiceId = proof.invoices?.id || proof.invoice_id || "";
 
   const reviewProof = (proofStatus: "accepted" | "rejected", invoiceStatus?: string) => {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
     const formData = new FormData();
     formData.append("proof_id", proof.id);
     formData.append("invoice_id", invoiceId);
@@ -385,11 +388,14 @@ function ProofActions({ proof }: { proof: PaymentProofTableItem }) {
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to update proof status.");
+      } finally {
+        actionLockRef.current = false;
       }
     });
   };
 
   const voidProof = () => {
+    if (actionLockRef.current) return;
     const reason = window.prompt("Why are you voiding this payment? (Optional)");
     if (reason === null) return;
 
@@ -401,12 +407,15 @@ function ProofActions({ proof }: { proof: PaymentProofTableItem }) {
     formData.append("proof_id", proof.id);
     if (reason) formData.append("reason", reason);
 
+    actionLockRef.current = true;
     startTransition(async () => {
       try {
         await voidPaymentAction(formData);
         toast.success("Payment voided successfully.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to void payment.");
+      } finally {
+        actionLockRef.current = false;
       }
     });
   };
@@ -577,6 +586,7 @@ export function PaymentProofsTable({
   const [selectedProofIds, setSelectedProofIds] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isQuickReviewPending, startQuickReviewTransition] = useTransition();
+  const quickReviewLockRef = useRef(false);
 
   const counts = useMemo(() => {
     return initialProofs.reduce(
@@ -669,6 +679,7 @@ export function PaymentProofsTable({
   };
 
   const quickReviewActiveProof = (proofStatus: "accepted" | "rejected", invoiceStatus?: string) => {
+    if (quickReviewLockRef.current || isQuickReviewPending) return;
     if (!activeProof || activeProof.status !== "pending") {
       toast.message("Select a pending proof first.");
       return;
@@ -693,6 +704,7 @@ export function PaymentProofsTable({
     formData.append("proof_status", proofStatus);
     formData.append("invoice_status", invoiceStatus ?? (proofStatus === "accepted" ? "paid" : activeProof.invoices?.status || "unpaid"));
 
+    quickReviewLockRef.current = true;
     startQuickReviewTransition(async () => {
       try {
         await reviewProofAction(formData);
@@ -700,6 +712,8 @@ export function PaymentProofsTable({
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to update proof status.");
+      } finally {
+        quickReviewLockRef.current = false;
       }
     });
   };

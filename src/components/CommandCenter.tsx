@@ -86,11 +86,19 @@ function readStoredSearches() {
 }
 
 function saveStoredItems(items: CommandItem[]) {
-  window.localStorage.setItem(COMMAND_RECENTS_KEY, JSON.stringify(items.slice(0, MAX_RECENTS)));
+  try {
+    window.localStorage.setItem(COMMAND_RECENTS_KEY, JSON.stringify(items.slice(0, MAX_RECENTS)));
+  } catch {
+    // Recents are supportive only; private-mode storage should not break navigation.
+  }
 }
 
 function saveStoredSearches(items: string[]) {
-  window.localStorage.setItem(COMMAND_SEARCHES_KEY, JSON.stringify(items.slice(0, MAX_SEARCHES)));
+  try {
+    window.localStorage.setItem(COMMAND_SEARCHES_KEY, JSON.stringify(items.slice(0, MAX_SEARCHES)));
+  } catch {
+    // Search history is optional.
+  }
 }
 
 function itemIcon(type: CommandItemType, id: string) {
@@ -185,7 +193,7 @@ function ShortcutsHelpDialog({ open, onClose }: { open: boolean; onClose: () => 
             initial={reduceMotion ? false : { y: 12, scale: 0.97, opacity: 0 }}
             animate={{ y: 0, scale: 1, opacity: 1 }}
             exit={reduceMotion ? undefined : { y: 8, scale: 0.98, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.34, 1.42, 0.64, 1] }}
+            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
               <div>
@@ -311,11 +319,12 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
     () => sections.flatMap((section) => section.items.map((item) => ({ section: section.title, item }))),
     [sections]
   );
+  const safeSelectedIndex = entries.length > 0 ? Math.min(Math.max(selectedIndex, 0), entries.length - 1) : 0;
 
   useEffect(() => {
     if (!open) return;
-    document.getElementById(`command-entry-${selectedIndex}`)?.scrollIntoView({ block: "nearest" });
-  }, [open, selectedIndex]);
+    document.getElementById(`command-entry-${safeSelectedIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [open, safeSelectedIndex]);
 
   const rememberItem = (item: CommandItem) => {
     const next = [item, ...recents.filter((recent) => recent.id !== item.id)].slice(0, MAX_RECENTS);
@@ -446,19 +455,21 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
   const handlePaletteKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      if (entries.length === 0) return;
       setSelectedIndex((current) => Math.min(entries.length - 1, current + 1));
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      if (entries.length === 0) return;
       setSelectedIndex((current) => Math.max(0, current - 1));
       return;
     }
 
-    if (event.key === "Enter" && entries[selectedIndex]) {
+    if (event.key === "Enter" && entries[safeSelectedIndex]) {
       event.preventDefault();
-      runItem(entries[selectedIndex].item);
+      runItem(entries[safeSelectedIndex].item);
       return;
     }
 
@@ -530,14 +541,14 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
               initial={reduceMotion ? false : { y: 12, scale: 0.97, opacity: 0 }}
               animate={{ y: 0, scale: 1, opacity: 1 }}
               exit={reduceMotion ? undefined : { y: 8, scale: 0.98, opacity: 0 }}
-              transition={{ duration: 0.22, ease: [0.34, 1.42, 0.64, 1] }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
               onKeyDown={handlePaletteKeyDown}
             >
               <div className="flex items-center gap-3 border-b border-slate-100/60 px-4 py-3 sm:px-5">
                 <Search className="h-5 w-5 text-slate-400" aria-hidden="true" />
                 <input
                   ref={inputRef}
-                  aria-activedescendant={entries[selectedIndex] ? `command-entry-${selectedIndex}` : undefined}
+                  aria-activedescendant={entries[safeSelectedIndex] ? `command-entry-${safeSelectedIndex}` : undefined}
                   aria-controls="command-results"
                   aria-expanded="true"
                   aria-label="Search Qaffel commands and records"
@@ -581,7 +592,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                         <div className="grid gap-1">
                           {section.items.map((item) => {
                             const absoluteIndex = entries.findIndex((entry) => entry.item.id === item.id && entry.section === section.title);
-                            const selected = absoluteIndex === selectedIndex;
+                            const selected = absoluteIndex === safeSelectedIndex;
                             const Icon = itemIcon(item.type, item.id);
 
                             return (

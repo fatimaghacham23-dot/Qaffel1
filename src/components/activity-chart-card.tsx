@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
@@ -64,7 +66,7 @@ export const ActivityChartCard = ({
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1, // Animate each child (bar) with a delay
+        staggerChildren: 0.025,
       },
     },
   };
@@ -76,7 +78,7 @@ export const ActivityChartCard = ({
       opacity: 1,
       transformOrigin: "bottom",
       transition: {
-        duration: 0.5,
+        duration: 0.18,
         ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
       },
     },

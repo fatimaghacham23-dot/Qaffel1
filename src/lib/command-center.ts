@@ -212,6 +212,15 @@ export const staticCommandItems: CommandItem[] = [
     href: "/settings/service-presets",
     group: "Settings",
     keywords: ["settings", "services", "templates"]
+  },
+  {
+    id: "settings:billing",
+    type: "setting",
+    title: "Workspace billing",
+    subtitle: "Subscription state, billing owner, seats, and audit",
+    href: "/settings/billing",
+    group: "Settings",
+    keywords: ["settings", "billing", "subscription", "plan", "seats", "workspace"]
   }
 ];
 

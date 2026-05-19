@@ -1,6 +1,6 @@
 -- Add voided columns to payment_proofs
-alter table public.payment_proofs add column voided_at timestamp with time zone;
-alter table public.payment_proofs add column void_reason text;
+alter table public.payment_proofs add column if not exists voided_at timestamp with time zone;
+alter table public.payment_proofs add column if not exists void_reason text;
 
 -- If status column has a check constraint, we might need to update it.
 -- Let's check for existing constraints and add 'voided' to the allowed values if one exists.

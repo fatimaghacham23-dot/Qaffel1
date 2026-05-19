@@ -39,7 +39,7 @@ export function AnimatedDashboardCard({
       className="q-panel relative h-full min-h-[240px] overflow-hidden p-4 sm:min-h-[260px] sm:p-5"
       initial={shouldAnimate ? { opacity: 0, y: 16, scale: 0.98 } : false}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: "spring", stiffness: 260, damping: 28 }}
+      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cedar/25 to-transparent" />
 
@@ -57,7 +57,7 @@ export function AnimatedDashboardCard({
               className="relative max-w-full"
               initial={shouldAnimate ? { opacity: 0, y: 10 } : false}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.18 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
             >
               <p className="text-sm font-medium text-slate-500">{title}</p>
               <p className="mt-2 break-words text-3xl font-bold tracking-normal text-ink sm:text-4xl">{value}</p>

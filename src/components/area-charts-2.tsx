@@ -42,21 +42,51 @@ function ChartContainer({
 }) {
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, '')}`;
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [isMeasured, setIsMeasured] = React.useState(false);
+
+  React.useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const updateMeasured = () => {
+      const rect = node.getBoundingClientRect();
+      setIsMeasured(rect.width > 0 && rect.height > 0);
+    };
+
+    updateMeasured();
+
+    if (typeof ResizeObserver === 'undefined') {
+      const frame = window.requestAnimationFrame(updateMeasured);
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    const observer = new ResizeObserver(updateMeasured);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <ChartContext.Provider value={{ config }}>
       <div
+        ref={containerRef}
         data-slot="chart"
         data-chart={chartId}
         {...props}
         className={cn(
-          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex w-full justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex w-full min-w-0 justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className,
         )}
         style={{ minHeight: 240, ...(props.style || {}) }}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        {isMeasured ? (
+          <RechartsPrimitive.ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            {children}
+          </RechartsPrimitive.ResponsiveContainer>
+        ) : (
+          <div className="q-skeleton h-full min-h-[240px] w-full rounded-2xl" aria-hidden="true" />
+        )}
       </div>
     </ChartContext.Provider>
   );

@@ -18,7 +18,7 @@ function DashboardClock() {
       <div className="flex min-h-[360px] w-full items-center justify-center overflow-visible sm:min-h-[440px] xl:min-h-[520px]">
         <Clock
           timeZone="Asia/Beirut"
-          initialSecondsMode="smooth"
+          initialSecondsMode="tick1"
         />
       </div>
     </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { reviewProofAction, runAiProofVerificationAction, saveReviewerDecisionNoteAction } from "@/app/actions";
 import { toast } from "sonner";
@@ -129,6 +129,9 @@ export function ProofReviewForm({
   const [isNotePending, startNote] = useTransition();
   const [note, setNote] = useState(() => reviewerDecisionNote || "");
   const [aiStepIndex, setAiStepIndex] = useState(0);
+  const reviewLockRef = useRef(false);
+  const aiLockRef = useRef(false);
+  const noteLockRef = useRef(false);
 
   useEffect(() => {
     if (!isAiPending) return;
@@ -141,6 +144,8 @@ export function ProofReviewForm({
   const aiStepDisplay = isAiPending ? aiStepIndex : 0;
 
   const handleAction = (status: "accepted" | "rejected", invoiceStatus?: string) => {
+    if (reviewLockRef.current) return;
+    reviewLockRef.current = true;
     const formData = new FormData();
     formData.append("proof_id", proofId);
     formData.append("invoice_id", invoiceId);
@@ -158,11 +163,15 @@ export function ProofReviewForm({
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to update proof status.");
+      } finally {
+        reviewLockRef.current = false;
       }
     });
   };
 
   const runAiAssist = () => {
+    if (aiLockRef.current) return;
+    aiLockRef.current = true;
     setAiStepIndex(0);
     const formData = new FormData();
     formData.append("proof_id", proofId);
@@ -178,11 +187,15 @@ export function ProofReviewForm({
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "AI assist failed.");
+      } finally {
+        aiLockRef.current = false;
       }
     });
   };
 
   const saveNote = (next?: string) => {
+    if (noteLockRef.current) return;
+    noteLockRef.current = true;
     const value = next ?? note;
     const formData = new FormData();
     formData.append("proof_id", proofId);
@@ -196,6 +209,8 @@ export function ProofReviewForm({
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save note.");
+      } finally {
+        noteLockRef.current = false;
       }
     });
   };
@@ -210,6 +225,8 @@ export function ProofReviewForm({
   };
 
   const requestReupload = () => {
+    if (noteLockRef.current) return;
+    noteLockRef.current = true;
     const line = "Request: ask client to re-upload a clearer proof.";
     const next = note.trim() ? (note.includes("re-upload") ? note : `${note.trim()}\n${line}`) : line;
     setNote(next);
@@ -224,6 +241,8 @@ export function ProofReviewForm({
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save note.");
+      } finally {
+        noteLockRef.current = false;
       }
     });
   };

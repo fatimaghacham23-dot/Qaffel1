@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Network,
   ReceiptText,
+  ShieldCheck,
   SlidersHorizontal,
   UserCircle,
   Users,
@@ -47,6 +48,7 @@ const navGroups = [
     items: [
       { href: "/settings/payment-methods", label: "Methods", icon: CreditCard },
       { href: "/settings/service-presets", label: "Service presets", icon: SlidersHorizontal },
+      { href: "/settings/billing", label: "Billing", icon: ShieldCheck },
       { href: "/settings/profile", label: "Profile", icon: UserCircle },
       { href: "/team", label: "Team", icon: UsersRound }
     ]

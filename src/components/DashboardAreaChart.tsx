@@ -105,8 +105,7 @@ export function DashboardAreaChart({ data, hasTrendData, paidTotal, outstandingT
               stroke="var(--color-paidAmount)"
               strokeWidth={2}
               type="monotone"
-              isAnimationActive
-              animationDuration={700}
+              isAnimationActive={false}
             />
             <Area
               dataKey="outstandingAmount"
@@ -115,8 +114,7 @@ export function DashboardAreaChart({ data, hasTrendData, paidTotal, outstandingT
               stroke="var(--color-outstandingAmount)"
               strokeWidth={2}
               type="monotone"
-              isAnimationActive
-              animationDuration={700}
+              isAnimationActive={false}
             />
           </AreaChart>
         </ChartContainer>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import { voidPaymentAction } from "@/app/actions";
 import { toast } from "sonner";
 
@@ -10,8 +10,10 @@ interface VoidPaymentButtonProps {
 
 export function VoidPaymentButton({ proofId }: VoidPaymentButtonProps) {
   const [isPending, startTransition] = useTransition();
+  const pendingRef = useRef(false);
 
   const handleVoid = async () => {
+    if (pendingRef.current) return;
     const reason = window.prompt("Why are you voiding this payment? (Optional)");
     if (reason === null) return; // User cancelled
 
@@ -19,6 +21,7 @@ export function VoidPaymentButton({ proofId }: VoidPaymentButtonProps) {
       return;
     }
 
+    pendingRef.current = true;
     startTransition(async () => {
       try {
         const formData = new FormData();
@@ -29,6 +32,8 @@ export function VoidPaymentButton({ proofId }: VoidPaymentButtonProps) {
         toast.success("Payment voided successfully");
       } catch (error: any) {
         toast.error(error.message || "Failed to void payment");
+      } finally {
+        pendingRef.current = false;
       }
     });
   };

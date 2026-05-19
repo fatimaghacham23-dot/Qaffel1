@@ -1,5 +1,5 @@
 -- Create service_presets table
-create table public.service_presets (
+create table if not exists public.service_presets (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
@@ -15,6 +15,7 @@ create table public.service_presets (
 alter table public.service_presets enable row level security;
 
 -- Policies
+drop policy if exists "Users can manage their own service presets" on public.service_presets;
 create policy "Users can manage their own service presets"
   on public.service_presets
   for all

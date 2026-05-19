@@ -79,9 +79,11 @@ export function Clock({
   }, [secondsMode, timeZone])
 
   useEffect(() => {
-    let animationFrameId: number
+    let animationFrameId = 0
     let initialStateFrameId: number
+    let tickInterval: ReturnType<typeof setInterval> | null = null
     let running = true
+    const shouldUseRaf = secondsMode === "smooth" || secondsMode === "highFreq"
 
     updateClockHands()
     initialStateFrameId = requestAnimationFrame(() => {
@@ -99,7 +101,13 @@ export function Clock({
       updateClockHands()
       animationFrameId = requestAnimationFrame(animateSeconds)
     }
-    animateSeconds()
+    if (shouldUseRaf) {
+      animateSeconds()
+    } else {
+      tickInterval = setInterval(() => {
+        if (running) updateClockHands()
+      }, secondsMode === "tick2" ? 500 : 1000)
+    }
 
     // Pause RAF when tab is hidden to save CPU
     const onVisibility = () => {
@@ -108,19 +116,21 @@ export function Clock({
         cancelAnimationFrame(animationFrameId)
       } else {
         running = true
-        animateSeconds()
+        if (shouldUseRaf) animateSeconds()
+        else updateClockHands()
       }
     }
     document.addEventListener("visibilitychange", onVisibility)
 
     return () => {
       clearInterval(minuteInterval)
+      if (tickInterval) clearInterval(tickInterval)
       cancelAnimationFrame(initialStateFrameId)
       cancelAnimationFrame(animationFrameId)
       running = false
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [updateClockHands])
+  }, [secondsMode, updateClockHands])
 
   const months = [
     "Jan",

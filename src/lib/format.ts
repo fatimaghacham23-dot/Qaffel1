@@ -12,11 +12,13 @@ export function money(value: number | string | null | undefined, currency: "USD"
 
 export function shortDate(value: string | null | undefined) {
   if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("en-GB", {
     year: "numeric",
     month: "short",
     day: "numeric"
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function todayIso() {

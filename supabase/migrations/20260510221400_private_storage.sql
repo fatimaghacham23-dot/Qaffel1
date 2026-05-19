@@ -6,6 +6,8 @@ where id = 'payment-proofs';
 -- 2. Drop existing overly-public policies for storage.objects
 drop policy if exists "anyone can upload payment proof files" on storage.objects;
 drop policy if exists "anyone can read payment proof files" on storage.objects;
+drop policy if exists "public can upload payment proof files" on storage.objects;
+drop policy if exists "owners can read their payment proof files" on storage.objects;
 
 -- 3. Policy to allow public uploads to the payment-proofs bucket
 -- We keep this for public uploads via invoice pages, but we don't allow listing or reading.

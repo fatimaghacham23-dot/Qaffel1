@@ -1,7 +1,7 @@
 "use client";
 
 import { approveInvoiceByTokenAction, rejectInvoiceByTokenAction } from "@/app/actions";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface ClientApprovalBoxProps {
@@ -11,22 +11,26 @@ interface ClientApprovalBoxProps {
 
 export function ClientApprovalBox({ documentType = "invoice", token }: ClientApprovalBoxProps) {
   const [isPending, setIsPending] = useState(false);
+  const pendingRef = useRef(false);
   const label = documentType === "quote" ? "Quote" : "Invoice";
   const lowerLabel = label.toLowerCase();
 
   const handleAction = async (formData: FormData, action: typeof approveInvoiceByTokenAction) => {
+    if (pendingRef.current) return;
     const name = formData.get("name") as string;
     if (!name?.trim()) {
       toast.error("Please enter your name.");
       return;
     }
 
+    pendingRef.current = true;
     setIsPending(true);
     try {
       await action(formData);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to process approval.");
     } finally {
+      pendingRef.current = false;
       setIsPending(false);
     }
   };

@@ -7,18 +7,23 @@ describe("permission matrix", () => {
     expect(hasPermission("owner", "team.manage")).toBe(true);
     expect(hasPermission("owner", "exports.finance")).toBe(true);
     expect(hasPermission("owner", "payments.void")).toBe(true);
+    expect(hasPermission("owner", "billing.manage")).toBe(true);
   });
 
-  it("admin has all permissions except is not owner", () => {
+  it("admin has operational admin permissions and billing visibility", () => {
     expect(hasPermission("admin", "invoices.create")).toBe(true);
     expect(hasPermission("admin", "team.manage")).toBe(true);
     expect(hasPermission("admin", "exports.finance")).toBe(true);
+    expect(hasPermission("admin", "billing.view")).toBe(true);
+    expect(hasPermission("admin", "billing.manage")).toBe(false);
   });
 
-  it("finance can review proofs and void but not create invoices", () => {
+  it("finance can review proofs, void payments, and view billing but not create invoices", () => {
     expect(hasPermission("finance", "proofs.review")).toBe(true);
     expect(hasPermission("finance", "payments.void")).toBe(true);
     expect(hasPermission("finance", "exports.finance")).toBe(true);
+    expect(hasPermission("finance", "billing.view")).toBe(true);
+    expect(hasPermission("finance", "billing.manage")).toBe(false);
     expect(hasPermission("finance", "invoices.create")).toBe(false);
     expect(hasPermission("finance", "team.manage")).toBe(false);
   });
@@ -29,6 +34,7 @@ describe("permission matrix", () => {
     expect(hasPermission("operations", "recoveries.manage")).toBe(true);
     expect(hasPermission("operations", "payments.void")).toBe(false);
     expect(hasPermission("operations", "team.manage")).toBe(false);
+    expect(hasPermission("operations", "billing.view")).toBe(false);
   });
 
   it("reviewer can only review proofs", () => {
@@ -37,6 +43,7 @@ describe("permission matrix", () => {
     expect(hasPermission("reviewer", "invoices.create")).toBe(false);
     expect(hasPermission("reviewer", "team.manage")).toBe(false);
     expect(hasPermission("reviewer", "exports.finance")).toBe(false);
+    expect(hasPermission("reviewer", "billing.view")).toBe(false);
   });
 
   it("staff has read-only access", () => {

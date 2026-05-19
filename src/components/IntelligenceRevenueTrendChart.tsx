@@ -74,9 +74,9 @@ export function IntelligenceRevenueTrendChart({ revenue }: { revenue: RevenueInt
                 />
               }
             />
-            <Area type="monotone" dataKey="collected" stroke="var(--color-collected)" fill="url(#intelCollected)" strokeWidth={2} isAnimationActive animationDuration={700} />
-            <Area type="monotone" dataKey="billed" stroke="var(--color-billed)" fill="url(#intelBilled)" strokeWidth={2} isAnimationActive animationDuration={700} />
-            <Area type="monotone" dataKey="overdue" stroke="var(--color-overdue)" fill="url(#intelOverdue)" strokeWidth={2} isAnimationActive animationDuration={700} />
+            <Area type="monotone" dataKey="collected" stroke="var(--color-collected)" fill="url(#intelCollected)" strokeWidth={2} isAnimationActive={false} />
+            <Area type="monotone" dataKey="billed" stroke="var(--color-billed)" fill="url(#intelBilled)" strokeWidth={2} isAnimationActive={false} />
+            <Area type="monotone" dataKey="overdue" stroke="var(--color-overdue)" fill="url(#intelOverdue)" strokeWidth={2} isAnimationActive={false} />
           </AreaChart>
         </ChartContainer>
       ) : (

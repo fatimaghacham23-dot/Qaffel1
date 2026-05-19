@@ -913,6 +913,12 @@ export async function reviewProofAction(formData: FormData) {
 
   await assertOk(proofFetchError);
   if (!proof) throw new Error("Proof not found.");
+  if (proof.invoice_id !== invoiceId) {
+    throw new Error("This proof does not belong to the selected invoice.");
+  }
+  if (proof.status !== "pending") {
+    throw new Error("This proof has already been reviewed. Refresh the queue before taking another action.");
+  }
 
   const { data: allProofs } = await supabase
     .from("payment_proofs")
@@ -955,21 +961,28 @@ export async function reviewProofAction(formData: FormData) {
     }
   }
 
-  const { error: proofUpdateError } = await supabase
+  const reviewedAt = new Date().toISOString();
+  const { data: updatedProof, error: proofUpdateError } = await supabase
     .from("payment_proofs")
     .update({
       status: proofStatus,
-      confirmed_at: proofStatus === "accepted" ? new Date().toISOString() : null,
+      confirmed_at: proofStatus === "accepted" ? reviewedAt : null,
       reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
+      reviewed_at: reviewedAt,
       reviewer_name: ctx.userFullName,
       reviewer_role: ctx.role,
       receipt_token: receiptToken
     })
     .eq("id", proofId)
-    .eq("invoice_id", invoiceId);
+    .eq("invoice_id", invoiceId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
 
   await assertOk(proofUpdateError);
+  if (!updatedProof) {
+    throw new Error("This proof was already reviewed. Refresh the queue before taking another action.");
+  }
 
   const oldStatus = invoice.status;
 
@@ -988,6 +1001,20 @@ export async function reviewProofAction(formData: FormData) {
     finalInvoiceStatus = reconcileInvoiceStatus(invoice, refreshedProofs || []);
 
     if (requestedInvoiceStatus === "paid" && finalInvoiceStatus !== "paid") {
+      await supabase
+        .from("payment_proofs")
+        .update({
+          status: "pending",
+          confirmed_at: null,
+          reviewed_by: null,
+          reviewed_at: null,
+          reviewer_name: null,
+          reviewer_role: null,
+          receipt_token: null
+        })
+        .eq("id", proofId)
+        .eq("invoice_id", invoiceId)
+        .eq("status", proofStatus);
       throw new Error("Accepted payments do not cover the full invoice total yet. Accept this proof as partial instead.");
     }
   }
@@ -1542,7 +1569,14 @@ export async function uploadProofAction(formData: FormData) {
     }
   }
 
-  const extension = file.name.split(".").pop() || "png";
+  const extension =
+    file.type === "application/pdf"
+      ? "pdf"
+      : file.type === "image/jpeg"
+        ? "jpg"
+        : file.type === "image/webp"
+          ? "webp"
+          : "png";
   const path = `${invoice.id}/${crypto.randomUUID()}.${extension}`;
   const { error: uploadError } = await supabase.storage.from("payment-proofs").upload(path, await file.arrayBuffer(), {
     contentType: file.type || "image/png"
@@ -1561,6 +1595,9 @@ export async function uploadProofAction(formData: FormData) {
     payment_date: nullableText(formData, "payment_date")
   });
 
+  if (proofError) {
+    await supabase.storage.from("payment-proofs").remove([path]);
+  }
   await assertOk(proofError);
 
   await createInvoiceEvent({
@@ -1598,16 +1635,22 @@ export async function voidPaymentAction(formData: FormData) {
   const invoiceId = proof.invoice_id;
 
   // 2. Void the proof
-  const { error: voidError } = await supabase
+  const { data: voidedProof, error: voidError } = await supabase
     .from("payment_proofs")
     .update({
       status: "voided",
       voided_at: new Date().toISOString(),
       void_reason: reason
     })
-    .eq("id", proofId);
+    .eq("id", proofId)
+    .eq("status", "accepted")
+    .select("id")
+    .maybeSingle();
 
   await assertOk(voidError);
+  if (!voidedProof) {
+    throw new Error("This payment was already changed. Refresh before trying again.");
+  }
 
   // 3. Recalculate invoice status
   const { data: refreshedProofs } = await supabase

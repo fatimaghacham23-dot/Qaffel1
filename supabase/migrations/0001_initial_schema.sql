@@ -67,12 +67,14 @@ alter table public.payment_methods enable row level security;
 alter table public.invoices enable row level security;
 alter table public.payment_proofs enable row level security;
 
+drop policy if exists "profiles are managed by owner" on public.profiles;
 create policy "profiles are managed by owner"
 on public.profiles
 for all
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
+drop policy if exists "public invoice pages can read business profile" on public.profiles;
 create policy "public invoice pages can read business profile"
 on public.profiles
 for select
@@ -84,12 +86,14 @@ using (
   )
 );
 
+drop policy if exists "clients are managed by owner" on public.clients;
 create policy "clients are managed by owner"
 on public.clients
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "public invoice pages can read invoice client name" on public.clients;
 create policy "public invoice pages can read invoice client name"
 on public.clients
 for select
@@ -101,12 +105,14 @@ using (
   )
 );
 
+drop policy if exists "payment methods are managed by owner" on public.payment_methods;
 create policy "payment methods are managed by owner"
 on public.payment_methods
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "public invoice pages can read active payment methods" on public.payment_methods;
 create policy "public invoice pages can read active payment methods"
 on public.payment_methods
 for select
@@ -119,17 +125,20 @@ using (
   )
 );
 
+drop policy if exists "invoices are managed by owner" on public.invoices;
 create policy "invoices are managed by owner"
 on public.invoices
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "public invoice pages can read invoices by token" on public.invoices;
 create policy "public invoice pages can read invoices by token"
 on public.invoices
 for select
 using (public_token is not null);
 
+drop policy if exists "proofs are readable by invoice owner" on public.payment_proofs;
 create policy "proofs are readable by invoice owner"
 on public.payment_proofs
 for select
@@ -141,6 +150,7 @@ using (
   )
 );
 
+drop policy if exists "proofs are reviewable by invoice owner" on public.payment_proofs;
 create policy "proofs are reviewable by invoice owner"
 on public.payment_proofs
 for update
@@ -159,6 +169,7 @@ with check (
   )
 );
 
+drop policy if exists "public can upload invoice proofs" on public.payment_proofs;
 create policy "public can upload invoice proofs"
 on public.payment_proofs
 for insert
@@ -174,11 +185,13 @@ insert into storage.buckets (id, name, public)
 values ('payment-proofs', 'payment-proofs', true)
 on conflict (id) do update set public = excluded.public;
 
+drop policy if exists "anyone can upload payment proof files" on storage.objects;
 create policy "anyone can upload payment proof files"
 on storage.objects
 for insert
 with check (bucket_id = 'payment-proofs');
 
+drop policy if exists "anyone can read payment proof files" on storage.objects;
 create policy "anyone can read payment proof files"
 on storage.objects
 for select

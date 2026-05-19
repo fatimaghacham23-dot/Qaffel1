@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, requireUser } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { requirePermission } from "@/lib/permissions";
+import { buildDefaultSubscription, canAddWorkspaceMember, type WorkspaceSubscription } from "@/lib/billing";
 
 /**
  * Invite a teammate to the workspace.
@@ -18,13 +19,46 @@ export async function inviteTeammateAction(formData: FormData) {
 
   if (!email) throw new Error("Email is required.");
 
-  // Check if already a member via their profile
-  const { data: existingMember } = await supabase
-    .from("workspace_members")
-    .select("id")
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("status", "active")
-    .limit(100);
+  const [
+    { data: subscriptionRow, error: subscriptionError },
+    { count: activeMembers, error: activeMembersError },
+    { count: pendingInvitations, error: pendingInvitationsError },
+    { data: existingInvitation, error: existingInvitationError }
+  ] = await Promise.all([
+    supabase.from("workspace_subscriptions").select("*").eq("workspace_id", ctx.workspaceId).maybeSingle(),
+    supabase.from("workspace_members").select("id", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId).eq("status", "active"),
+    supabase
+      .from("workspace_invitations")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId)
+      .is("accepted_at", null)
+      .gt("expires_at", new Date().toISOString()),
+    supabase
+      .from("workspace_invitations")
+      .select("id")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("email", email)
+      .is("accepted_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle()
+  ]);
+
+  if (subscriptionError) throw new Error(subscriptionError.message);
+  if (activeMembersError) throw new Error(activeMembersError.message);
+  if (pendingInvitationsError) throw new Error(pendingInvitationsError.message);
+  if (existingInvitationError) throw new Error(existingInvitationError.message);
+  if (existingInvitation) throw new Error("There is already a pending invitation for this email.");
+
+  const subscription = ((subscriptionRow as WorkspaceSubscription | null) ?? buildDefaultSubscription(ctx.workspaceId, ctx.userId));
+  const seatCheck = canAddWorkspaceMember({
+    subscription,
+    activeMembers: activeMembers ?? 0,
+    pendingInvitations: pendingInvitations ?? 0
+  });
+
+  if (!seatCheck.allowed) {
+    throw new Error(seatCheck.reason);
+  }
 
   // Create invitation
   const { error } = await supabase.from("workspace_invitations").insert({

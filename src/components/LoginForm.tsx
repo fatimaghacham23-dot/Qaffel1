@@ -13,45 +13,51 @@ export function LoginForm() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loading) return;
     setError("");
     setMessage("");
     setLoading(true);
 
     const form = new FormData(event.currentTarget);
-    const email = String(form.get("email") || "");
+    const email = String(form.get("email") || "").trim();
     const password = String(form.get("password") || "");
-    const fullName = String(form.get("full_name") || "");
-    const businessName = String(form.get("business_name") || "");
+    const fullName = String(form.get("full_name") || "").trim();
+    const businessName = String(form.get("business_name") || "").trim();
     const supabase = createClient();
 
-    const result =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                full_name: fullName,
-                business_name: businessName
+    try {
+      const result =
+        mode === "login"
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  full_name: fullName,
+                  business_name: businessName
+                }
               }
-            }
-          });
+            });
 
-    if (result.error) {
-      setError(result.error.message);
+      if (result.error) {
+        setError(result.error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (mode === "signup" && !result.data.session) {
+        setMessage("Check your email to confirm your account.");
+        setLoading(false);
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Authentication failed. Check your connection and try again.");
       setLoading(false);
-      return;
     }
-
-    if (mode === "signup" && !result.data.session) {
-      setMessage("Check your email to confirm your account.");
-      setLoading(false);
-      return;
-    }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (

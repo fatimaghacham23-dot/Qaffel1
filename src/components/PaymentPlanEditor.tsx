@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { money, shortDate } from "@/lib/format";
 import {
@@ -34,6 +34,7 @@ export function PaymentPlanEditor({ invoiceId, currency, remainingPrimary, initi
   const [plan, setPlan] = useState<InvoicePaymentPlan | null>(initialPlan);
   const [splitCount, setSplitCount] = useState(3);
   const [pending, startTransition] = useTransition();
+  const actionLockRef = useRef(false);
 
   const progress = useMemo(() => (plan ? paymentPlanProgress(plan) : null), [plan]);
 
@@ -76,10 +77,12 @@ export function PaymentPlanEditor({ invoiceId, currency, remainingPrimary, initi
   };
 
   const save = () => {
+    if (actionLockRef.current) return;
     if (!plan || !plan.milestones.length) {
       toast.error("Create milestones first.");
       return;
     }
+    actionLockRef.current = true;
     startTransition(async () => {
       try {
         const fd = new FormData();
@@ -89,11 +92,15 @@ export function PaymentPlanEditor({ invoiceId, currency, remainingPrimary, initi
         toast.success("Payment plan saved");
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not save plan");
+      } finally {
+        actionLockRef.current = false;
       }
     });
   };
 
   const clear = () => {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
     startTransition(async () => {
       try {
         const fd = new FormData();
@@ -103,11 +110,15 @@ export function PaymentPlanEditor({ invoiceId, currency, remainingPrimary, initi
         toast.success("Payment plan cleared");
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not clear plan");
+      } finally {
+        actionLockRef.current = false;
       }
     });
   };
 
   const toggleMilestone = (mid: string, satisfied: boolean) => {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
     startTransition(async () => {
       try {
         const fd = new FormData();
@@ -127,6 +138,8 @@ export function PaymentPlanEditor({ invoiceId, currency, remainingPrimary, initi
         toast.success(satisfied ? "Marked as received" : "Mark cleared");
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Update failed");
+      } finally {
+        actionLockRef.current = false;
       }
     });
   };

@@ -9,8 +9,11 @@ export function ManualPaymentForm({ invoiceId, isPaid }: { invoiceId: string; is
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const submitLockRef = useRef(false);
 
   const handleSubmit = async (formData: FormData) => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     startTransition(async () => {
       try {
         await createManualPaymentAction(formData);
@@ -37,15 +40,19 @@ export function ManualPaymentForm({ invoiceId, isPaid }: { invoiceId: string; is
               toast.success("Payment recorded successfully!");
               formRef.current?.reset();
               setShowForm(false);
+              submitLockRef.current = false;
               return;
             } catch (retryError: any) {
               toast.error(retryError?.message || "Failed to record payment");
+              submitLockRef.current = false;
               return;
             }
           }
         }
 
         toast.error(message);
+      } finally {
+        submitLockRef.current = false;
       }
     });
   };

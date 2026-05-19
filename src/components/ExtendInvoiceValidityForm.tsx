@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Calendar, RefreshCw } from "lucide-react";
 import { extendInvoiceValidityAction } from "@/app/actions";
 import { toast } from "sonner";
@@ -13,8 +13,19 @@ interface ExtendInvoiceValidityFormProps {
 export function ExtendInvoiceValidityForm({ invoiceId, currentValidUntil }: ExtendInvoiceValidityFormProps) {
   const [isPending, setIsRecording] = useState(false);
   const [customDate, setCustomDate] = useState("");
+  const [today, setToday] = useState("");
+  const pendingRef = useRef(false);
+
+  useEffect(() => {
+    const dateTimer = window.setTimeout(() => {
+      setToday(new Date().toISOString().split("T")[0]);
+    }, 0);
+    return () => window.clearTimeout(dateTimer);
+  }, []);
 
   const handleExtend = async (days?: number, date?: string) => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setIsRecording(true);
     const formData = new FormData();
     formData.append("id", invoiceId);
@@ -27,6 +38,7 @@ export function ExtendInvoiceValidityForm({ invoiceId, currentValidUntil }: Exte
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to extend link");
     } finally {
+      pendingRef.current = false;
       setIsRecording(false);
     }
   };
@@ -77,7 +89,7 @@ export function ExtendInvoiceValidityForm({ invoiceId, currentValidUntil }: Exte
               value={customDate}
               onChange={(e) => setCustomDate(e.target.value)}
               disabled={isPending}
-              min={new Date().toISOString().split("T")[0]}
+              min={today}
             />
           </div>
           <button

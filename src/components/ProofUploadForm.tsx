@@ -23,13 +23,20 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [paymentDate, setPaymentDate] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewBlobRef = useRef<string | null>(null);
+  const uploadLockRef = useRef(false);
   const canSubmit = Boolean(file) && !isUploading;
 
   useEffect(() => {
+    const dateTimer = window.setTimeout(() => {
+      setPaymentDate(new Date().toISOString().split("T")[0]);
+    }, 0);
+
     return () => {
+      window.clearTimeout(dateTimer);
       if (previewBlobRef.current) {
         URL.revokeObjectURL(previewBlobRef.current);
       }
@@ -49,6 +56,8 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
   };
 
   const handleSubmit = async (formData: FormData) => {
+    if (uploadLockRef.current) return;
+
     const formFile = formData.get("proof");
     const f = formFile instanceof File && formFile.size > 0 ? formFile : file;
 
@@ -83,6 +92,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
 
     formData.set("proof", f);
 
+    uploadLockRef.current = true;
     setIsUploading(true);
     try {
       await uploadProofAction(formData);
@@ -93,6 +103,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
       } else {
         toast.error(message);
       }
+      uploadLockRef.current = false;
       setIsUploading(false);
     }
   };
@@ -193,7 +204,15 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
             <label className="label" htmlFor="payment_date">
               Payment date
             </label>
-            <input className="field" id="payment_date" name="payment_date" type="date" defaultValue={new Date().toISOString().split("T")[0]} disabled={isUploading} />
+            <input
+              className="field"
+              id="payment_date"
+              name="payment_date"
+              type="date"
+              value={paymentDate}
+              onChange={(event) => setPaymentDate(event.target.value)}
+              disabled={isUploading}
+            />
           </div>
           <div>
             <label className="label" htmlFor="method">

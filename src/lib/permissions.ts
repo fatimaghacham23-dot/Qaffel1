@@ -26,6 +26,8 @@ export type Permission =
   | "exports.download"
   | "exports.finance"
   | "reports.view"
+  | "billing.view"
+  | "billing.manage"
   | "recoveries.manage"
   | "recoveries.view"
   | "approvals.request"
@@ -44,7 +46,7 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
     "proofs.view", "proofs.review", "payments.void",
     "clients.create", "clients.edit", "clients.view", "clients.delete",
     "settings.manage", "team.manage", "team.view",
-    "exports.download", "exports.finance", "reports.view",
+    "exports.download", "exports.finance", "reports.view", "billing.view", "billing.manage",
     "recoveries.manage", "recoveries.view",
     "approvals.request", "approvals.resolve",
     "assignments.view", "assignments.manage", "assignments.work",
@@ -54,7 +56,7 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
     "proofs.view", "proofs.review", "payments.void",
     "clients.create", "clients.edit", "clients.view", "clients.delete",
     "settings.manage", "team.manage", "team.view",
-    "exports.download", "exports.finance", "reports.view",
+    "exports.download", "exports.finance", "reports.view", "billing.view",
     "recoveries.manage", "recoveries.view",
     "approvals.request", "approvals.resolve",
     "assignments.view", "assignments.manage", "assignments.work",
@@ -64,7 +66,7 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly Permission[]> = {
     "proofs.view", "proofs.review", "payments.void",
     "clients.view",
     "team.view",
-    "exports.download", "exports.finance", "reports.view",
+    "exports.download", "exports.finance", "reports.view", "billing.view",
     "recoveries.view",
     "approvals.request", "approvals.resolve",
     "assignments.view", "assignments.manage", "assignments.work",
@@ -141,9 +143,9 @@ export const ROLE_LABELS: Record<WorkspaceRole, string> = {
  * Human-readable role descriptions.
  */
 export const ROLE_DESCRIPTIONS: Record<WorkspaceRole, string> = {
-  owner: "Full control of the workspace. Can transfer ownership.",
-  admin: "Full operational access. Can manage team members and settings.",
-  finance: "Can review proofs, void payments, and access financial exports.",
+  owner: "Full control of the workspace, including billing authority.",
+  admin: "Full operational access. Can manage team members, settings, and view billing state.",
+  finance: "Can review proofs, void payments, view billing state, and access financial exports.",
   operations: "Can create invoices, manage clients, and handle recoveries.",
   reviewer: "Can review and approve payment proofs.",
   staff: "Read-only access to invoices, clients, and proofs.",

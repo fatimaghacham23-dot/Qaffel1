@@ -1,7 +1,7 @@
 -- Workspace memory: internal client notes, per-invoice work notes, message templates.
 -- Operational only; no public exposure. RLS ties rows to auth.uid() and owned clients/invoices.
 
-create table public.client_workspace_notes (
+create table if not exists public.client_workspace_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   client_id uuid references public.clients(id) on delete cascade not null,
@@ -14,7 +14,7 @@ create table public.client_workspace_notes (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-create table public.invoice_workspace_notes (
+create table if not exists public.invoice_workspace_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   invoice_id uuid references public.invoices(id) on delete cascade not null,
@@ -27,7 +27,7 @@ create table public.invoice_workspace_notes (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-create table public.workspace_message_templates (
+create table if not exists public.workspace_message_templates (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   category text not null check (category in (
@@ -42,25 +42,27 @@ create table public.workspace_message_templates (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-create index client_workspace_notes_client_id_idx on public.client_workspace_notes(client_id);
-create index client_workspace_notes_user_id_idx on public.client_workspace_notes(user_id);
-create index client_workspace_notes_created_at_idx on public.client_workspace_notes(created_at desc);
+create index if not exists client_workspace_notes_client_id_idx on public.client_workspace_notes(client_id);
+create index if not exists client_workspace_notes_user_id_idx on public.client_workspace_notes(user_id);
+create index if not exists client_workspace_notes_created_at_idx on public.client_workspace_notes(created_at desc);
 
-create index invoice_workspace_notes_invoice_id_idx on public.invoice_workspace_notes(invoice_id);
-create index invoice_workspace_notes_user_id_idx on public.invoice_workspace_notes(user_id);
-create index invoice_workspace_notes_created_at_idx on public.invoice_workspace_notes(created_at desc);
+create index if not exists invoice_workspace_notes_invoice_id_idx on public.invoice_workspace_notes(invoice_id);
+create index if not exists invoice_workspace_notes_user_id_idx on public.invoice_workspace_notes(user_id);
+create index if not exists invoice_workspace_notes_created_at_idx on public.invoice_workspace_notes(created_at desc);
 
-create index workspace_message_templates_user_id_idx on public.workspace_message_templates(user_id);
-create index workspace_message_templates_favorite_idx on public.workspace_message_templates(user_id, is_favorite desc);
+create index if not exists workspace_message_templates_user_id_idx on public.workspace_message_templates(user_id);
+create index if not exists workspace_message_templates_favorite_idx on public.workspace_message_templates(user_id, is_favorite desc);
 
 alter table public.client_workspace_notes enable row level security;
 alter table public.invoice_workspace_notes enable row level security;
 alter table public.workspace_message_templates enable row level security;
 
+drop policy if exists "client_workspace_notes_select_own" on public.client_workspace_notes;
 create policy "client_workspace_notes_select_own"
   on public.client_workspace_notes for select
   using (auth.uid() = user_id);
 
+drop policy if exists "client_workspace_notes_insert_own" on public.client_workspace_notes;
 create policy "client_workspace_notes_insert_own"
   on public.client_workspace_notes for insert
   with check (
@@ -71,6 +73,7 @@ create policy "client_workspace_notes_insert_own"
     )
   );
 
+drop policy if exists "client_workspace_notes_update_own" on public.client_workspace_notes;
 create policy "client_workspace_notes_update_own"
   on public.client_workspace_notes for update
   using (auth.uid() = user_id)
@@ -82,14 +85,17 @@ create policy "client_workspace_notes_update_own"
     )
   );
 
+drop policy if exists "client_workspace_notes_delete_own" on public.client_workspace_notes;
 create policy "client_workspace_notes_delete_own"
   on public.client_workspace_notes for delete
   using (auth.uid() = user_id);
 
+drop policy if exists "invoice_workspace_notes_select_own" on public.invoice_workspace_notes;
 create policy "invoice_workspace_notes_select_own"
   on public.invoice_workspace_notes for select
   using (auth.uid() = user_id);
 
+drop policy if exists "invoice_workspace_notes_insert_own" on public.invoice_workspace_notes;
 create policy "invoice_workspace_notes_insert_own"
   on public.invoice_workspace_notes for insert
   with check (
@@ -100,6 +106,7 @@ create policy "invoice_workspace_notes_insert_own"
     )
   );
 
+drop policy if exists "invoice_workspace_notes_update_own" on public.invoice_workspace_notes;
 create policy "invoice_workspace_notes_update_own"
   on public.invoice_workspace_notes for update
   using (auth.uid() = user_id)
@@ -111,23 +118,28 @@ create policy "invoice_workspace_notes_update_own"
     )
   );
 
+drop policy if exists "invoice_workspace_notes_delete_own" on public.invoice_workspace_notes;
 create policy "invoice_workspace_notes_delete_own"
   on public.invoice_workspace_notes for delete
   using (auth.uid() = user_id);
 
+drop policy if exists "workspace_message_templates_select_own" on public.workspace_message_templates;
 create policy "workspace_message_templates_select_own"
   on public.workspace_message_templates for select
   using (auth.uid() = user_id);
 
+drop policy if exists "workspace_message_templates_insert_own" on public.workspace_message_templates;
 create policy "workspace_message_templates_insert_own"
   on public.workspace_message_templates for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "workspace_message_templates_update_own" on public.workspace_message_templates;
 create policy "workspace_message_templates_update_own"
   on public.workspace_message_templates for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "workspace_message_templates_delete_own" on public.workspace_message_templates;
 create policy "workspace_message_templates_delete_own"
   on public.workspace_message_templates for delete
   using (auth.uid() = user_id);
