@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { CommandCenter } from "@/components/CommandCenter";
 import { createClient } from "@/lib/supabase/server";
@@ -59,6 +60,7 @@ export default async function RootLayout({
           {children}
         </div>
         <CommandCenter />
+        <Analytics />
         <Toaster position="bottom-right" />
       </body>
     </html>
