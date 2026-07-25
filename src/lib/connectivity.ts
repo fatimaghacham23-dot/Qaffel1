@@ -1,4 +1,5 @@
 import { formatPaymentMethod, money, shortDate } from "@/lib/format";
+import { buildSharedReportUrl } from "@/lib/urls";
 import { buildIntelligenceBundle } from "@/lib/intelligence-layer";
 import type { OCEventRow, OCInvoiceRow } from "@/lib/operations-center";
 import { parsePaymentPlan } from "@/lib/payment-plan";
@@ -492,8 +493,7 @@ export function humanReportType(type: string) {
 }
 
 export function sharedReportUrl(tokenValue: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return `${base}/share/report/${tokenValue}`;
+  return buildSharedReportUrl(tokenValue);
 }
 
 export function formatShareExpiration(value: string | null | undefined) {

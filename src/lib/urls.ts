@@ -42,3 +42,8 @@ export function buildEligibleClientPortalUrl(token?: string | null, locale?: Pub
   return buildClientPortalUrl(token, locale);
 }
 export function buildSharedReportUrl(token: string, locale?: PublicLocale) { return withLocale("share/report/:token", token, locale); }
+
+export function buildEligibleSharedReportUrl(token?: string | null, locale?: PublicLocale) {
+  if (!token) return null;
+  return buildSharedReportUrl(token, locale);
+}

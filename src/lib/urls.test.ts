@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildClientPortalUrl, buildEligibleClientPortalUrl, buildEligibleReceiptUrl, buildPaymentUrl, buildReceiptUrl, buildSharedReportUrl, getCanonicalAppUrl } from "@/lib/urls";
+import { buildClientPortalUrl, buildEligibleClientPortalUrl, buildEligibleReceiptUrl, buildPaymentUrl, buildReceiptUrl, buildEligibleSharedReportUrl, buildSharedReportUrl, getCanonicalAppUrl } from "@/lib/urls";
 
 describe("canonical public URLs", () => {
   it("uses the production domain outside development", () => {
@@ -63,5 +63,24 @@ describe("canonical public URLs", () => {
     const source = readFileSync(resolve(process.cwd(), "src/app/client/[token]/page.tsx"), "utf8");
     expect(source).toContain("if (!portalHeader?.client_name)");
     expect(source).toContain("return notFound();");
+  });
+  it("builds canonical shared report URLs with encoded localized tokens", () => {
+    const prior = process.env.NODE_ENV;
+    const priorAppUrl = process.env.APP_URL;
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.APP_URL = "https://preview.example.test/base?lang=ignored";
+    expect(buildSharedReportUrl("report / token", "en")).toBe("https://qaffel.online/share/report/report%20%2F%20token?lang=en");
+    expect(buildSharedReportUrl("report / token", "ar")).toBe("https://qaffel.online/share/report/report%20%2F%20token?lang=ar");
+    (process.env as Record<string, string | undefined>).NODE_ENV = prior;
+    if (priorAppUrl === undefined) delete process.env.APP_URL; else process.env.APP_URL = priorAppUrl;
+  });
+  it("does not generate a shared report URL without a token", () => {
+    expect(buildEligibleSharedReportUrl()).toBeNull();
+    expect(buildEligibleSharedReportUrl(null)).toBeNull();
+  });
+  it("keeps invalid shared report tokens on the safe not-found path", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/app/share/report/[token]/page.tsx"), "utf8");
+    expect(source).toContain("if (!data)");
+    expect(source).toContain("notFound();");
   });
 });
