@@ -10,6 +10,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { BrandedPublicSurface } from "@/components/brand/BrandedPublicSurface";
 import { BusinessLogoOrMonogram } from "@/components/brand/BusinessLogoOrMonogram";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
+import { buildReceiptUrl } from "@/lib/urls";
 
 export default async function PrintInvoicePage({
   params
@@ -63,7 +64,7 @@ export default async function PrintInvoicePage({
   const latestReceiptToken = proofRows
     .filter((p) => p.receipt_token)
     .sort((a, b) => new Date(b.confirmed_at || 0).getTime() - new Date(a.confirmed_at || 0).getTime())[0]?.receipt_token;
-  const receiptLink = latestReceiptToken ? `${appUrl}/receipt/${latestReceiptToken}` : null;
+  const receiptLink = latestReceiptToken ? buildReceiptUrl(latestReceiptToken) : null;
 
   const isQuote = isQuoteDocument(invoice);
   const nounTitle = documentNounTitle(invoice);

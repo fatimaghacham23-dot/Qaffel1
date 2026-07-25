@@ -11,7 +11,7 @@ export function getCanonicalAppUrl() {
   const raw = configuredBaseUrl();
   const withProtocol = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
   const url = new URL(withProtocol);
-  if (process.env.NODE_ENV === "production" && url.hostname === "localhost") return "https://qaffel.online";
+  if (process.env.NODE_ENV === "production") return "https://qaffel.online";
   url.pathname = "/";
   url.search = "";
   url.hash = "";
@@ -30,5 +30,10 @@ function withLocale(path: string, token: string, locale?: PublicLocale) {
 
 export function buildPaymentUrl(token: string, locale?: PublicLocale) { return withLocale("pay/:token", token, locale); }
 export function buildReceiptUrl(token: string, locale?: PublicLocale) { return withLocale("receipt/:token", token, locale); }
+
+export function buildEligibleReceiptUrl(payment: { status?: string | null; voided_at?: string | null; receipt_token?: string | null }, locale?: PublicLocale) {
+  if (payment.status !== "accepted" || payment.voided_at || !payment.receipt_token) return null;
+  return buildReceiptUrl(payment.receipt_token, locale);
+}
 export function buildClientPortalUrl(token: string, locale?: PublicLocale) { return withLocale("client/:token", token, locale); }
 export function buildSharedReportUrl(token: string, locale?: PublicLocale) { return withLocale("share/report/:token", token, locale); }

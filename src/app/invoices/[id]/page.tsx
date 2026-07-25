@@ -23,7 +23,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { ManualPaymentForm } from "@/components/ManualPaymentForm";
 import { VoidPaymentButton } from "@/components/VoidPaymentButton";
 import { FollowUpSection } from "@/components/FollowUpSection";
-import { buildPaymentUrl } from "@/lib/urls";
+import { buildPaymentUrl, buildReceiptUrl } from "@/lib/urls";
 import { ExtendInvoiceValidityForm } from "@/components/ExtendInvoiceValidityForm";
 import { InvoiceDepositFields } from "@/components/InvoiceDepositFields";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
@@ -907,7 +907,7 @@ export default async function InvoiceDetailPage({
                           Open receipt
                         </Link>
                         <CopyLinkButton 
-                          value={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/receipt/${proof.receipt_token}`} 
+                          value={buildReceiptUrl(proof.receipt_token)}
                           label="Copy link" 
                           className="btn btn-secondary text-[10px] py-1 px-2" 
                         />

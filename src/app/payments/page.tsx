@@ -9,6 +9,7 @@ import { canAccessPaymentView, paymentViewsForRole } from "@/lib/payment-access"
 import { manualPaymentIds } from "@/lib/payment-history";
 import { paymentViews, resolvePaymentView, type PaymentView } from "@/lib/payments-view";
 import { requireUser } from "@/lib/supabase/server";
+import { buildEligibleReceiptUrl } from "@/lib/urls";
 
 const labels: Record<PaymentView,string> = { awaiting:"Awaiting review", approved:"Approved", rejected:"Rejected", manual:"Manual payments", receipts:"Receipts", history:"Recent payment activity" };
 
@@ -23,7 +24,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     const { data } = await supabase.from("payment_proofs").select("*, invoices!inner(id,title,invoice_number,status,amount_usd,amount_lbp,user_id,workspace_id,clients(name))").eq("invoices.workspace_id", ctx.workspaceId).eq("status", "pending").order("uploaded_at", { ascending:true }).limit(50);
     const members = await getAssignmentMembers(supabase, ctx.workspaceId);
     const assignments = await getAssignmentsForTargets({ supabase, workspaceId:ctx.workspaceId, targetType:"proof", targetIds:(data || []).map(p => p.id), members });
-    const rows = await Promise.all((data || []).map(async p => { const item:any = { ...p, assignments: assignments.get(p.id) || [] }; if (p.image_url && !p.image_url.startsWith("http")) { const signed = await supabase.storage.from("payment-proofs").createSignedUrl(p.image_url, 3600); item.image_url = signed.data?.signedUrl || null; } return item; }));
+    const rows = await Promise.all((data || []).map(async p => { const item:any = { ...p, assignments: assignments.get(p.id) || [], receipt_url: buildEligibleReceiptUrl(p) }; if (p.image_url && !p.image_url.startsWith("http")) { const signed = await supabase.storage.from("payment-proofs").createSignedUrl(p.image_url, 3600); item.image_url = signed.data?.signedUrl || null; } return item; }));
     return <AppShell role={ctx.role}><header className="mb-6"><p className="q-section-label">Collections</p><h1 className="mt-1 text-3xl font-semibold text-ink">Payments</h1></header>{nav}<PaymentProofsTable initialProofs={rows as PaymentProofTableItem[]} assignmentMembers={members} canManageAssignments={hasPermission(ctx.role, "assignments.manage")} /></AppShell>;
   }
   let q = supabase.from("payment_proofs").select("id,status,amount_usd,amount_lbp,method,uploaded_at,confirmed_at,reviewed_at,payment_date,voided_at,reviewer_decision_note,receipt_token,invoice_id,invoices!inner(title,invoice_number,workspace_id,clients(name))").eq("invoices.workspace_id", ctx.workspaceId).limit(50);

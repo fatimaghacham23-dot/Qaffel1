@@ -54,6 +54,7 @@ export type PaymentProofTableItem = {
   voided_at?: string | null;
   void_reason?: string | null;
   receipt_token?: string | null;
+  receipt_url?: string | null;
   ai_review_json?: unknown;
   ai_review_summary?: string | null;
   reviewer_decision_note?: string | null;
@@ -456,9 +457,9 @@ function ProofActions({ proof }: { proof: PaymentProofTableItem }) {
                 </a>
               </DropdownMenuItem>
             ) : null}
-            {proof.receipt_token && (
+            {proof.receipt_url && (
               <DropdownMenuItem asChild>
-                <Link href={`/receipt/${proof.receipt_token}`} target="_blank">
+                <Link href={proof.receipt_url} target="_blank">
                   Open receipt
                 </Link>
               </DropdownMenuItem>
@@ -498,8 +499,6 @@ function ProofMobileCard({
   canManageAssignments: boolean;
 }) {
   const invoiceHref = proof.invoices?.id ? `/invoices/${proof.invoices.id}` : "#";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-
   return (
     <article className={cn("q-mobile-card", selected && "border-cedar/40 bg-cedar/5", active && "outline outline-2 outline-cedar/25")}>
       <div className="flex items-start gap-3">
@@ -557,13 +556,13 @@ function ProofMobileCard({
         </div>
       </div>
 
-      {proof.receipt_token ? (
+      {proof.receipt_url ? (
         <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row">
-          <Link className="btn btn-secondary text-xs" href={`/receipt/${proof.receipt_token}`} target="_blank">
+          <Link className="btn btn-secondary text-xs" href={proof.receipt_url} target="_blank">
             Open receipt
           </Link>
           <CopyLinkButton
-            value={`${appUrl}/receipt/${proof.receipt_token}`}
+            value={proof.receipt_url}
             label="Copy receipt link"
             className="btn btn-secondary text-xs"
           />

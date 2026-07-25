@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/CopyButton";
 import { PublicContentContainer, PublicPageShell } from "@/components/public/PublicPageShell";
@@ -10,6 +11,13 @@ import { PublicNextStepPanel, PublicTrustSignalGrid, type PublicTrustSignal } fr
 import { money, shortDate, formatPaymentMethod } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
+import { buildReceiptUrl } from "@/lib/urls";
+
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const canonicalUrl = buildReceiptUrl(token);
+  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl } };
+}
 
 export default async function ReceiptPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
