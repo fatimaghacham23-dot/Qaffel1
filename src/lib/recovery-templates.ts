@@ -78,14 +78,13 @@ export function buildRecoveryTemplateCtx(input: {
   title: string;
   remainingPrimary: number;
   primaryCurrency: "USD" | "LBP";
-  publicToken: string;
+  publicUrl: string;
 }): RecoveryTemplateCtx {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return {
     clientName: input.clientName,
     invoiceNumber: input.invoiceNumber,
     title: input.title,
     remainingLabel: money(input.remainingPrimary, input.primaryCurrency),
-    publicUrl: `${base}/pay/${input.publicToken}`
+    publicUrl: input.publicUrl
   };
 }

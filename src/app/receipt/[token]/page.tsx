@@ -12,11 +12,12 @@ import { money, shortDate, formatPaymentMethod } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
 import { buildReceiptUrl } from "@/lib/urls";
+import { buildPaymentUrl } from "@/lib/urls";
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params;
   const canonicalUrl = buildReceiptUrl(token);
-  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl } };
+  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl }, robots: { index: false, follow: false } };
 }
 
 export default async function ReceiptPage({ params }: { params: Promise<{ token: string }> }) {
@@ -35,7 +36,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ token:
   const statusLower = String(receipt.status || "").toLowerCase();
   const isVoided = statusLower === "voided" || statusLower === "rejected";
   const isAccepted = statusLower === "accepted";
-  const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pay/${receipt.invoice_public_token}`;
+  const invoiceUrl = buildPaymentUrl(String(receipt.invoice_public_token));
 
   const statusBadgeLabel = isVoided ? "Voided" : isAccepted ? "Accepted" : "Pending";
   const statusBadgeClass = isVoided

@@ -6,10 +6,12 @@ import { headers } from "next/headers";
 import "./globals.css";
 import { CommandCenter } from "@/components/CommandCenter";
 import { createClient } from "@/lib/supabase/server";
+import { getCanonicalAppUrl } from "@/lib/urls";
 
 export const metadata: Metadata = {
   title: "Qaffel",
-  description: "Payment tracking for Lebanese freelancers and small businesses"
+  description: "Payment tracking for Lebanese freelancers and small businesses",
+  metadataBase: new URL(getCanonicalAppUrl())
 };
 
 export default async function RootLayout({

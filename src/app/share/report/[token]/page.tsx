@@ -14,7 +14,7 @@ import { buildSharedReportUrl } from "@/lib/urls";
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params;
   const canonicalUrl = buildSharedReportUrl(token);
-  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl } };
+  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl }, robots: { index: false, follow: false } };
 }
 
 type PublicSharedReport = {

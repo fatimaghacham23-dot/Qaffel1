@@ -11,6 +11,7 @@ import { BrandedPublicSurface } from "@/components/brand/BrandedPublicSurface";
 import { BusinessLogoOrMonogram } from "@/components/brand/BusinessLogoOrMonogram";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
 import { buildReceiptUrl } from "@/lib/urls";
+import { buildPaymentUrl } from "@/lib/urls";
 
 export default async function PrintInvoicePage({
   params
@@ -51,8 +52,7 @@ export default async function PrintInvoicePage({
     return notFound();
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const paymentLink = `${appUrl}/pay/${invoice.public_token}`;
+  const paymentLink = buildPaymentUrl(invoice.public_token);
   const businessName = profile?.business_name || profile?.full_name || documentNounTitle(invoice);
   const logoUrl = await signBrandLogoUrl(supabase, profile?.logo_storage_path ?? null);
   const brandColor = sanitizeHexColor(profile?.brand_color ?? undefined, "#116466");

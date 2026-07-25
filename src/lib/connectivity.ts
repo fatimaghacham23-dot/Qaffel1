@@ -1,5 +1,5 @@
 import { formatPaymentMethod, money, shortDate } from "@/lib/format";
-import { buildSharedReportUrl } from "@/lib/urls";
+import { buildSharedReportUrl, getCanonicalAppUrl } from "@/lib/urls";
 import { buildIntelligenceBundle } from "@/lib/intelligence-layer";
 import type { OCEventRow, OCInvoiceRow } from "@/lib/operations-center";
 import { parsePaymentPlan } from "@/lib/payment-plan";
@@ -418,7 +418,7 @@ export function buildConnectivityModel(input: {
     }
   ];
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getCanonicalAppUrl();
   const whatsappSuggestions = recoveryRows.slice(0, 3).map((row) => ({
     title: `${row["Client name"] || "Client"} - ${row["Invoice number"] || "invoice"}`,
     body: `Hi ${row["Client name"] || ""}, sharing a quick update on ${row["Invoice number"] || "your invoice"}. The current remaining balance is ${row["Remaining USD"] ? money(row["Remaining USD"], "USD") : money(row["Remaining LBP"], "LBP")}. You can review the payment link from the invoice message or reply here if anything needs clarification.`

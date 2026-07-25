@@ -21,7 +21,7 @@ import { buildClientPortalUrl } from "@/lib/urls";
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params;
   const canonicalUrl = buildClientPortalUrl(token);
-  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl } };
+  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl }, robots: { index: false, follow: false } };
 }
 
 function PortalFlag({ tone, label }: { tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }) {
