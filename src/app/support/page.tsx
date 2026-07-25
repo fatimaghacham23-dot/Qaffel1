@@ -1,0 +1,2 @@
+import { PublicInfoPage } from "@/components/PublicInfoPage";
+export default function SupportPage() { return <PublicInfoPage title="Support"><p>For help with invoices, payment links, proof review, or access to a business workspace, contact the business that sent the payment request first.</p><p>Qaffel operator support contact details appear here when configured for the service.</p></PublicInfoPage>; }

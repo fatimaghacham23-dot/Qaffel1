@@ -14,6 +14,7 @@ import { shortDate } from "@/lib/format";
 import type { DocumentType, InvoiceStatus } from "@/lib/types";
 import { parsePaymentPlan } from "@/lib/payment-plan";
 import { sanitizeHexColor, normalizeDocumentTheme } from "@/lib/brand";
+import { validateInvoiceCreatorForm, type InvoiceCreatorFieldErrors } from "@/lib/invoice-creator";
 import { assertAllowedRasterImageBytes } from "@/lib/image-bytes";
 import {
   buildAiSummary,
@@ -294,6 +295,28 @@ async function assertOk(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
+class InvoiceCreatorSubmissionError extends Error {
+  fieldErrors: InvoiceCreatorFieldErrors;
+
+  constructor(message: string, fieldErrors: InvoiceCreatorFieldErrors = {}) {
+    super(message);
+    this.name = "InvoiceCreatorSubmissionError";
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+type CreateInvoiceCreatorActionResult =
+  | {
+      ok: true;
+      id: string;
+      href: string;
+    }
+  | {
+      ok: false;
+      fieldErrors?: InvoiceCreatorFieldErrors;
+      message: string;
+    };
+
 export async function updateProfileAction(formData: FormData) {
   const { supabase, user } = await requireUser();
   const { error } = await supabase.from("profiles").upsert({
@@ -367,13 +390,17 @@ export async function removeBusinessLogoAction() {
 }
 
 export async function createClientAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "clients.create", "You do not have access to create clients.");
+  const ownerId = ctx.workspaceOwnerId;
   const invoiceId = nullableText(formData, "invoice_id");
 
   const { data: client, error } = await supabase
     .from("clients")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
+      workspace_id: ctx.workspaceId,
       name: text(formData, "name"),
       phone: nullableText(formData, "phone"),
       email: nullableText(formData, "email"),
@@ -386,12 +413,11 @@ export async function createClientAction(formData: FormData) {
   await assertOk(error);
 
   if (invoiceId && client) {
-    // Verify ownership of the invoice before updating
     const { data: invoice } = await supabase
       .from("invoices")
-      .select("id")
+      .select("id, workspace_id")
       .eq("id", invoiceId)
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .single();
 
     if (invoice) {
@@ -399,7 +425,7 @@ export async function createClientAction(formData: FormData) {
         .from("invoices")
         .update({ client_id: client.id })
         .eq("id", invoiceId)
-        .eq("user_id", user.id);
+        .eq("workspace_id", ctx.workspaceId);
 
       await assertOk(linkError);
       revalidatePath(`/invoices/${invoiceId}`);
@@ -413,27 +439,32 @@ export async function createClientAction(formData: FormData) {
 }
 
 export async function regenerateClientPortalTokenAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "clients.edit", "You do not have access to update clients.");
   const clientId = text(formData, "client_id");
-
   const nextToken = portalToken();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
     .update({ client_portal_token: nextToken })
     .eq("id", clientId)
-    .eq("user_id", user.id);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id")
+    .maybeSingle();
 
   await assertOk(error);
-
+  if (!data) throw new Error("Client not found or access denied.");
   revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}`);
 }
 
 export async function updateClientAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "clients.edit", "You do not have access to update clients.");
   const id = text(formData, "id");
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
     .update({
       name: text(formData, "name"),
@@ -442,23 +473,38 @@ export async function updateClientAction(formData: FormData) {
       notes: nullableText(formData, "notes")
     })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id")
+    .maybeSingle();
 
   await assertOk(error);
+  if (!data) throw new Error("Client not found or access denied.");
   revalidatePath("/clients");
 }
 
 export async function deleteClientAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const { error } = await supabase.from("clients").delete().eq("id", text(formData, "id")).eq("user_id", user.id);
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "clients.delete", "You do not have access to delete clients.");
+  const { data, error } = await supabase
+    .from("clients")
+    .delete()
+    .eq("id", text(formData, "id"))
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id")
+    .maybeSingle();
   await assertOk(error);
+  if (!data) throw new Error("Client not found or access denied.");
   revalidatePath("/clients");
 }
-
 export async function createPaymentMethodAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "settings.manage", "You do not have access to manage payment methods.");
+  const ownerId = ctx.workspaceOwnerId;
   const { error } = await supabase.from("payment_methods").insert({
-    user_id: user.id,
+    user_id: ownerId,
+    workspace_id: ctx.workspaceId,
     type: text(formData, "type"),
     label: text(formData, "label"),
     instructions: text(formData, "instructions"),
@@ -475,8 +521,10 @@ export async function createPaymentMethodAction(formData: FormData) {
 }
 
 export async function updatePaymentMethodAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const { error } = await supabase
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "settings.manage", "You do not have access to manage payment methods.");
+  const { data, error } = await supabase
     .from("payment_methods")
     .update({
       type: text(formData, "type"),
@@ -490,97 +538,128 @@ export async function updatePaymentMethodAction(formData: FormData) {
       is_active: formData.get("is_active") === "on"
     })
     .eq("id", text(formData, "id"))
-    .eq("user_id", user.id);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id")
+    .maybeSingle();
 
   await assertOk(error);
+  if (!data) throw new Error("Payment method not found or access denied.");
   revalidatePath("/settings/payment-methods");
 }
 
 export async function setDefaultPaymentMethodAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "settings.manage", "You do not have access to manage payment methods.");
   const id = text(formData, "id");
 
   const { data: oldestMethod, error: oldestError } = await supabase
     .from("payment_methods")
     .select("created_at")
-    .eq("user_id", user.id)
+    .eq("workspace_id", ctx.workspaceId)
     .eq("is_active", true)
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
   await assertOk(oldestError);
-
   const createdAt = oldestMethod?.created_at
     ? new Date(new Date(oldestMethod.created_at).getTime() - 1000).toISOString()
     : new Date().toISOString();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("payment_methods")
-    .update({
-      is_active: true,
-      created_at: createdAt
-    })
+    .update({ is_active: true, created_at: createdAt })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id")
+    .maybeSingle();
 
   await assertOk(error);
+  if (!data) throw new Error("Payment method not found or access denied.");
   revalidatePath("/settings/payment-methods");
 }
 
 export async function deletePaymentMethodAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const { error } = await supabase
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "settings.manage", "You do not have access to manage payment methods.");
+  const { data, error } = await supabase
     .from("payment_methods")
     .delete()
     .eq("id", text(formData, "id"))
-    .eq("user_id", user.id);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id")
+    .maybeSingle();
 
   await assertOk(error);
+  if (!data) throw new Error("Payment method not found or access denied.");
   revalidatePath("/settings/payment-methods");
 }
-
-export async function createInvoiceAction(formData: FormData) {
+async function createInvoiceRecord(
+  formData: FormData,
+  {
+    redirectOnUnauthenticated = true
+  }: {
+    redirectOnUnauthenticated?: boolean;
+  } = {}
+) {
   const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
 
   if (!user) {
+    if (!redirectOnUnauthenticated) {
+      throw new InvoiceCreatorSubmissionError("Your session expired. Sign in again before creating this document.");
+    }
+
     redirect("/login");
   }
 
-  const clientId = nullableText(formData, "client_id");
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "invoices.create", "You do not have access to create invoices.");
+  const ownerId = ctx.workspaceOwnerId;
+
+  const validation = validateInvoiceCreatorForm(formData);
+  if (!validation.ok) {
+    throw new InvoiceCreatorSubmissionError(validation.message, validation.fieldErrors);
+  }
+
+  const values = validation.values;
+  const clientId = values.clientId;
 
   if (clientId) {
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select("id")
       .eq("id", clientId)
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .maybeSingle();
 
     if (clientError) {
       console.error("createInvoiceAction client lookup error", clientError);
-      throw new Error(clientError.message);
+      throw new InvoiceCreatorSubmissionError(clientError.message, { client_id: "Could not verify the selected client." });
     }
 
     if (!client) {
-      throw new Error("Selected client was not found for your account.");
+      throw new InvoiceCreatorSubmissionError("Selected client was not found for your account.", {
+        client_id: "Selected client was not found for your account."
+      });
     }
   }
 
-  const requestedInvoiceNumber = nullableText(formData, "invoice_number");
-  const documentType = normalizeDocumentType(text(formData, "document_type"));
+  const requestedInvoiceNumber = values.requestedInvoiceNumber;
+  const documentType = values.documentType;
   const uniqueInvoiceNumber = await generateUniqueInvoiceNumber({
     supabase,
-    userId: user.id,
+    userId: ownerId,
     preferred: requestedInvoiceNumber,
     documentType
   });
-  const amountUsd = nullableNumber(formData, "amount_usd");
-  const amountLbp = nullableNumber(formData, "amount_lbp");
-  const currency = text(formData, "currency") || "USD";
+  const amountUsd = values.amountUsd;
+  const amountLbp = values.amountLbp;
+  const currency = values.currency;
   const depositFields = documentType === "quote"
     ? disabledDepositFields()
     : buildDepositFields(formData, {
@@ -592,22 +671,23 @@ export async function createInvoiceAction(formData: FormData) {
   const { data, error } = await supabase
     .from("invoices")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
+      workspace_id: ctx.workspaceId,
       client_id: clientId,
       document_type: documentType,
       invoice_number: uniqueInvoiceNumber.invoiceNumber,
-      title: text(formData, "title"),
-      description: nullableText(formData, "description"),
+      title: values.title,
+      description: values.description,
       amount_usd: amountUsd,
       amount_lbp: amountLbp,
       currency,
-      due_date: nullableText(formData, "due_date"),
-      status: (text(formData, "status") || "draft") as InvoiceStatus,
+      due_date: values.dueDate,
+      status: values.status,
       public_token: token(),
-      approval_status: formData.get("require_approval") === "yes" ? "pending" : "not_required",
-      valid_until: nullableText(formData, "valid_until"),
-      exchange_rate_lbp_per_usd: nullableNumber(formData, "exchange_rate_lbp_per_usd"),
-      rate_note: nullableText(formData, "rate_note"),
+      approval_status: values.requireApproval ? "pending" : "not_required",
+      valid_until: values.validUntil,
+      exchange_rate_lbp_per_usd: values.exchangeRateLbpPerUsd,
+      rate_note: values.rateNote,
       ...depositFields
     })
     .select("id, user_id, public_token")
@@ -615,12 +695,16 @@ export async function createInvoiceAction(formData: FormData) {
 
   if (error) {
     console.error("createInvoiceAction invoice insert error", error);
-    throw new Error(error.message);
+    throw new InvoiceCreatorSubmissionError(error.message);
   }
 
   await createInvoiceEvent({
     invoiceId: data.id,
-    userId: user.id,
+    userId: ownerId,
+    workspaceId: ctx.workspaceId,
+    actorId: user.id,
+    actorName: ctx.userFullName,
+    actorRole: ctx.role,
     eventType: documentType === "quote" ? "quote_created" : "invoice_created",
     message: documentType === "quote" ? "Quote created" : "Invoice created",
     metadata: uniqueInvoiceNumber.changed
@@ -631,7 +715,11 @@ export async function createInvoiceAction(formData: FormData) {
   if (depositFields.deposit_enabled) {
     await createInvoiceEvent({
       invoiceId: data.id,
-      userId: user.id,
+      userId: ownerId,
+      workspaceId: ctx.workspaceId,
+      actorId: user.id,
+      actorName: ctx.userFullName,
+      actorRole: ctx.role,
       eventType: "deposit_requested",
       message: "Deposit requested",
       metadata: depositEventMetadata(depositFields)
@@ -639,7 +727,43 @@ export async function createInvoiceAction(formData: FormData) {
   }
 
   revalidatePath("/invoices");
-  redirect(`/invoices/${data.id}`);
+  revalidatePath(`/invoices/${data.id}`);
+
+  return {
+    href: `/invoices/${data.id}`,
+    id: data.id
+  };
+}
+
+export async function createInvoiceAction(formData: FormData) {
+  const created = await createInvoiceRecord(formData);
+  redirect(created.href);
+}
+
+export async function createInvoiceFromCreatorAction(formData: FormData): Promise<CreateInvoiceCreatorActionResult> {
+  try {
+    const created = await createInvoiceRecord(formData, { redirectOnUnauthenticated: false });
+
+    return {
+      ok: true,
+      ...created
+    };
+  } catch (error) {
+    if (error instanceof InvoiceCreatorSubmissionError) {
+      return {
+        ok: false,
+        fieldErrors: error.fieldErrors,
+        message: error.message
+      };
+    }
+
+    console.error("createInvoiceFromCreatorAction unexpected error", error);
+
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Could not create document."
+    };
+  }
 }
 
 export async function updateInvoiceAction(formData: FormData) {
@@ -663,7 +787,7 @@ export async function updateInvoiceAction(formData: FormData) {
   const documentType = normalizeDocumentType(beforeInvoice.document_type);
   const uniqueInvoiceNumber = await generateUniqueInvoiceNumber({
     supabase,
-    userId: user.id,
+    userId: beforeInvoice.user_id,
     preferred: requestedInvoiceNumber,
     excludeInvoiceId: id,
     documentType
@@ -881,7 +1005,7 @@ export async function reviewProofAction(formData: FormData) {
   const proofStatus = (text(formData, "status") || text(formData, "proof_status")) as "accepted" | "rejected";
   const requestedInvoiceStatus = (text(formData, "requested_invoice_status") || text(formData, "invoice_status")) as InvoiceStatus;
 
-  const receiptToken = proofStatus === "accepted" ? crypto.randomUUID().replaceAll("-", "") : null;
+  let receiptToken: string | null = null;
 
   // Verify ownership of the invoice before updating anything
   const { data: invoice, error: invoiceCheckError } = await supabase
@@ -963,70 +1087,21 @@ export async function reviewProofAction(formData: FormData) {
     }
   }
 
-  const reviewedAt = new Date().toISOString();
-  const { data: updatedProof, error: proofUpdateError } = await supabase
-    .from("payment_proofs")
-    .update({
-      status: proofStatus,
-      confirmed_at: proofStatus === "accepted" ? reviewedAt : null,
-      reviewed_by: user.id,
-      reviewed_at: reviewedAt,
-      reviewer_name: ctx.userFullName,
-      reviewer_role: ctx.role,
-      receipt_token: receiptToken
-    })
-    .eq("id", proofId)
-    .eq("invoice_id", invoiceId)
-    .eq("status", "pending")
-    .select("id")
-    .maybeSingle();
-
-  await assertOk(proofUpdateError);
-  if (!updatedProof) {
-    throw new Error("This proof was already reviewed. Refresh the queue before taking another action.");
+  const { data: transitionRows, error: transitionError } = await supabase.rpc("review_payment_proof_atomic", {
+    p_proof_id: proofId,
+    p_invoice_id: invoiceId,
+    p_decision: proofStatus,
+    p_requested_invoice_status: requestedInvoiceStatus || null
+  });
+  await assertOk(transitionError);
+  const transition = Array.isArray(transitionRows) ? transitionRows[0] : transitionRows;
+  if (!transition) {
+    throw new Error("The proof review transition did not return a result.");
   }
 
-  const oldStatus = invoice.status;
-
-  // 2. Decide the final invoice status
-  let finalInvoiceStatus = requestedInvoiceStatus || (invoice.status as InvoiceStatus);
-
-  // If rejecting, we don't automatically change the invoice status to paid/partial
-  // We keep the requested status (which is usually the current status)
-  if (proofStatus === "accepted") {
-    // Re-calculate totals for reconciliation regardless of requested status
-    const { data: refreshedProofs } = await supabase
-      .from("payment_proofs")
-      .select("status, amount_usd, amount_lbp")
-      .eq("invoice_id", invoiceId);
-
-    finalInvoiceStatus = reconcileInvoiceStatus(invoice, refreshedProofs || []);
-
-    if (requestedInvoiceStatus === "paid" && finalInvoiceStatus !== "paid") {
-      await supabase
-        .from("payment_proofs")
-        .update({
-          status: "pending",
-          confirmed_at: null,
-          reviewed_by: null,
-          reviewed_at: null,
-          reviewer_name: null,
-          reviewer_role: null,
-          receipt_token: null
-        })
-        .eq("id", proofId)
-        .eq("invoice_id", invoiceId)
-        .eq("status", proofStatus);
-      throw new Error("Accepted payments do not cover the full invoice total yet. Accept this proof as partial instead.");
-    }
-  }
-
-  const { error: invoiceUpdateError } = await supabase
-    .from("invoices")
-    .update({ status: finalInvoiceStatus })
-    .eq("id", invoiceId);
-
-  await assertOk(invoiceUpdateError);
+  const oldStatus = transition.old_invoice_status as InvoiceStatus;
+  const finalInvoiceStatus = transition.final_invoice_status as InvoiceStatus;
+  receiptToken = transition.receipt_token || null;
   
   const isFullAccept = requestedInvoiceStatus === "paid" && proofStatus === "accepted";
   const hasPrimaryAmount = currency === "USD" ? (proof.amount_usd !== null) : (proof.amount_lbp !== null);
@@ -1296,93 +1371,23 @@ export async function createManualPaymentAction(formData: FormData) {
     .eq("invoice_id", invoiceId);
 
   const normalizedPaymentDate = isoDateOnly(paymentDate) || new Date().toISOString().slice(0, 10);
-  const normalizedMethod = normalizeMethod(method);
+  const { data: transitionRows, error: transitionError } = await supabase.rpc("record_manual_payment_atomic", {
+    p_invoice_id: invoiceId,
+    p_amount_usd: amountUsd,
+    p_amount_lbp: amountLbp,
+    p_payment_date: normalizedPaymentDate,
+    p_method: method,
+    p_note: note,
+    p_allow_duplicate: allowDuplicate
+  });
+  await assertOk(transitionError);
+  const transition = Array.isArray(transitionRows) ? transitionRows[0] : transitionRows;
+  if (!transition) throw new Error("Manual payment could not be recorded.");
 
-  if (!allowDuplicate) {
-    const { data: possibleDuplicates } = await supabase
-      .from("payment_proofs")
-      .select("id, status, amount_usd, amount_lbp, payment_date, method")
-      .eq("invoice_id", invoiceId)
-      .in("status", ["accepted", "pending"]);
-
-    const isDuplicate = (possibleDuplicates || []).some((p: any) => {
-      const sameDate = isoDateOnly(p.payment_date) && isoDateOnly(p.payment_date) === normalizedPaymentDate;
-      const sameMethod = normalizeMethod(p.method) && normalizeMethod(p.method) === normalizedMethod;
-      const sameUsd = amountUsd !== null && p.amount_usd !== null && Number(p.amount_usd) === Number(amountUsd);
-      const sameLbp = amountLbp !== null && p.amount_lbp !== null && Number(p.amount_lbp) === Number(amountLbp);
-      const hasAmountMatch = sameUsd || sameLbp;
-      return Boolean(sameDate && sameMethod && hasAmountMatch);
-    });
-
-    if (isDuplicate) {
-      throw new Error("This looks like a duplicate payment (same amount/date/method). Confirm to record it anyway.");
-    }
-  }
-
-  // 2. Create the accepted payment record
-  const receiptToken = crypto.randomUUID().replaceAll("-", "");
-  const { data: manualProof, error: proofError } = await supabase.from("payment_proofs").insert({
-    invoice_id: invoiceId,
-    user_id: invoice.user_id,
-    amount_usd: amountUsd,
-    amount_lbp: amountLbp,
-    payment_date: normalizedPaymentDate,
-    method,
-    note,
-    status: "accepted",
-    confirmed_at: new Date().toISOString(),
-    image_url: null, // Manual payment has no image unless we add it later
-    receipt_token: receiptToken
-  })
-    .select("id")
-    .single();
-
-  await assertOk(proofError);
-  if (!manualProof) throw new Error("Manual payment could not be recorded.");
-
-  const oldStatus = invoice.status;
-
-  // 3. Recalculate invoice status
   const { data: allProofs } = await supabase
     .from("payment_proofs")
     .select("status, amount_usd, amount_lbp")
     .eq("invoice_id", invoiceId);
-
-  const finalStatus = reconcileInvoiceStatus(invoice, allProofs || []);
-
-  const { error: invoiceUpdateError } = await supabase
-    .from("invoices")
-    .update({ status: finalStatus })
-    .eq("id", invoiceId)
-    .eq("workspace_id", ctx.workspaceId);
-
-  await assertOk(invoiceUpdateError);
-
-  await createInvoiceEvent({
-    invoiceId,
-    userId: invoice.user_id,
-    workspaceId: ctx.workspaceId,
-    actorId: user.id,
-    actorName: ctx.userFullName,
-    actorRole: ctx.role,
-    eventType: "manual_payment",
-    message: `Manual payment recorded: ${amountUsd ? "$" + amountUsd : ""}${amountUsd && amountLbp ? " + " : ""}${amountLbp ? amountLbp + " LBP" : ""}`,
-    metadata: { proof_id: manualProof.id, amount_usd: amountUsd, amount_lbp: amountLbp, method, receipt_token: receiptToken }
-  });
-
-  if (finalStatus !== oldStatus) {
-    await createInvoiceEvent({
-      invoiceId,
-      userId: invoice.user_id,
-      workspaceId: ctx.workspaceId,
-      actorId: user.id,
-      actorName: ctx.userFullName,
-      actorRole: ctx.role,
-      eventType: `invoice_${finalStatus}`,
-      message: `Invoice marked ${finalStatus}`
-    });
-  }
-
   if (didSatisfyDeposit(invoice, beforePaymentProofs || [], allProofs || [])) {
     await createInvoiceEvent({
       invoiceId,
@@ -1663,46 +1668,16 @@ export async function voidPaymentAction(formData: FormData) {
 
   const invoiceId = proof.invoice_id;
 
-  // 2. Void the proof
-  const { data: voidedProof, error: voidError } = await supabase
-    .from("payment_proofs")
-    .update({
-      status: "voided",
-      voided_at: new Date().toISOString(),
-      void_reason: reason
-    })
-    .eq("id", proofId)
-    .eq("status", "accepted")
-    .select("id")
-    .maybeSingle();
-
+  // 2. Void and reconcile in one serialized database transaction.
+  const { data: transitionRows, error: voidError } = await supabase.rpc("void_payment_proof_atomic", {
+    p_proof_id: proofId,
+    p_reason: reason
+  });
   await assertOk(voidError);
-  if (!voidedProof) {
-    throw new Error("This payment was already changed. Refresh before trying again.");
+  const transition = Array.isArray(transitionRows) ? transitionRows[0] : transitionRows;
+  if (!transition) {
+    throw new Error("The payment void transition did not return a result.");
   }
-
-  // 3. Recalculate invoice status
-  const { data: refreshedProofs } = await supabase
-    .from("payment_proofs")
-    .select("status, amount_usd, amount_lbp")
-    .eq("invoice_id", invoiceId);
-
-  const { data: invoice } = await supabase
-    .from("invoices")
-    .select("*")
-    .eq("id", invoiceId)
-    .eq("workspace_id", ctx.workspaceId)
-    .single();
-
-  if (!invoice) throw new Error("Invoice not found or access denied.");
-  const finalStatus = reconcileInvoiceStatus(invoice, refreshedProofs || []);
-
-  await supabase
-    .from("invoices")
-    .update({ status: finalStatus })
-    .eq("id", invoiceId)
-    .eq("workspace_id", ctx.workspaceId);
-
   // 4. Activity event
   await createInvoiceEvent({
     invoiceId,

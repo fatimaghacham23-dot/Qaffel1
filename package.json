@@ -12,7 +12,9 @@
     "release:check": "node scripts/release-check.mjs",
     "migrations:check": "node scripts/check-migrations.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=high",
-    "security:audit:all": "npm audit --audit-level=high"
+    "security:audit:all": "npm audit --audit-level=high",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -42,6 +44,7 @@
     "tweakpane": "^4.0.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

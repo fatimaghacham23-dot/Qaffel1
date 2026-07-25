@@ -19,10 +19,11 @@ export interface MinimalProof {
   status: string;
   amount_usd?: number | null;
   amount_lbp?: number | null;
+  voided_at?: string | null;
 }
 
 export function getAcceptedProofTotals(proofs: MinimalProof[]) {
-  const accepted = proofs.filter((p) => p.status === "accepted");
+  const accepted = proofs.filter((p) => p.status === "accepted" && !p.voided_at);
   return {
     totalUsd: accepted.reduce((sum, p) => sum + Number(p.amount_usd || 0), 0),
     totalLbp: accepted.reduce((sum, p) => sum + Number(p.amount_lbp || 0), 0),

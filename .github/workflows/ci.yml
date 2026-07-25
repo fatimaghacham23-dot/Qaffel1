@@ -60,6 +60,52 @@ jobs:
       - if: always()
         run: supabase stop --no-backup
 
+  browser-workflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_ALLOW_FIXTURE_RESET: "true"
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+      STRIPE_PRICE_SOLO: price_ci_solo
+      STRIPE_PRICE_TEAM: price_ci_team
+      STRIPE_PRICE_BUSINESS: price_ci_business
+      STRIPE_PRICE_ENTERPRISE: price_ci_enterprise
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - run: supabase start
+      - run: supabase db reset
+      - name: Export local Supabase credentials
+        shell: bash
+        run: |
+          supabase status -o env > supabase-status.env
+          source supabase-status.env
+          echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL}" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}" >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14
+      - if: always()
+        run: supabase stop --no-backup
   secret-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 10

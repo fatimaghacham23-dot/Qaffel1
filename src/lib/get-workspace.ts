@@ -22,7 +22,7 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext> => 
     .select(`
       workspace_id,
       role,
-      workspaces!inner ( name )
+      workspaces!inner ( name, owner_id )
     `)
     .eq("user_id", user.id)
     .eq("status", "active")

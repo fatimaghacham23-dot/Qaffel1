@@ -1,0 +1,2 @@
+import { PublicInfoPage } from "@/components/PublicInfoPage";
+export default function TermsPage() { return <PublicInfoPage title="Terms"><p>Qaffel is a payment-collection workspace. It helps businesses issue invoices, share payment instructions, review proof, and issue receipts. It does not hold customer funds or guarantee payment collection.</p><p>Businesses are responsible for their invoice content, payment instructions, review decisions, client communications, and compliance obligations.</p></PublicInfoPage>; }

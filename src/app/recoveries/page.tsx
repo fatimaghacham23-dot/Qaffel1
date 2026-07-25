@@ -116,7 +116,7 @@ export default async function RecoveriesPage() {
   const canManageAssignments = hasPermission(ctx.role, "assignments.manage");
 
   return (
-    <AppShell>
+    <AppShell role={ctx.role}>
       <SettingsPageHeader
         title="Overdue recovery center"
         subtitle="Operational view of overdue balances, reminder history, and suggested next steps. Nothing here sends automatically."

@@ -38,6 +38,8 @@ This manifest is the canonical repository order for Qaffel database changes. App
 | 32 | `20260518133000_stripe_billing_sync.sql` | Stripe billing synchronization |
 | 33 | `20260725090000_public_payment_security_hardening.sql` | Token-scoped public payment data and private proof storage |
 | 34 | `20260725093000_stripe_webhook_concurrency.sql` | Atomic Stripe webhook claims and replay-safe billing audit |
+| 35 | `20260725100000_workspace_role_rls_hardening.sql` | Role-specific workspace write policies and proof transition limits |
+| 36 | `20260725101500_financial_payment_atomicity.sql` | Serialized proof review, payment void, and invoice reconciliation RPCs |
 
 ## Rehearsal requirement
 

@@ -50,7 +50,7 @@ export default async function ProofsPage() {
   const voidedCount = proofsWithSignedUrls.filter((proof) => proof.status === "voided").length;
 
   return (
-    <AppShell>
+    <AppShell role={ctx.role}>
       <SettingsPageHeader
         title="Payment proofs"
         subtitle="Review payment proofs, accept full or partial payments, and track invoice balances."

@@ -65,7 +65,7 @@ export default async function InvoicesPage() {
   );
 
   return (
-    <AppShell>
+    <AppShell role={ctx.role}>
       <SettingsPageHeader
         title="Invoices"
         subtitle="Manage invoices, quotes, payment status, and client links."

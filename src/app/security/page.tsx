@@ -1,0 +1,2 @@
+import { PublicInfoPage } from "@/components/PublicInfoPage";
+export default function SecurityPage() { return <PublicInfoPage title="Security"><p>Qaffel uses authenticated workspace access and token-based public payment pages. Payment-proof storage is designed to remain private and business review is required before confirmation.</p><p>Businesses should use strong account credentials, review payment proof carefully, and configure payment instructions accurately. No security certification or guarantee is claimed on this page.</p></PublicInfoPage>; }

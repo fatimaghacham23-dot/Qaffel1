@@ -22,11 +22,12 @@ describe("workspace authorization", () => {
       workspaceContextFromMembership(user, {
         workspace_id: "workspace-1",
         role: "finance",
-        workspaces: { name: "Qaffel Test" }
+        workspaces: { name: "Qaffel Test", owner_id: "owner-1" }
       })
     ).toEqual({
       workspaceId: "workspace-1",
       workspaceName: "Qaffel Test",
+      workspaceOwnerId: "owner-1",
       userId: "user-1",
       userFullName: "Finance User",
       role: "finance"
@@ -36,7 +37,8 @@ describe("workspace authorization", () => {
   it("allows only capabilities granted by the existing permission matrix", () => {
     const context = workspaceContextFromMembership(user, {
       workspace_id: "workspace-1",
-      role: "finance"
+      role: "finance",
+      workspaces: { owner_id: "owner-1" }
     });
 
     expect(() => requireWorkspaceCapability(context, "payments.void")).not.toThrow();

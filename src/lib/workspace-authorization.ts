@@ -4,12 +4,16 @@ import { requirePermission } from "@/lib/permissions";
 export type ActiveWorkspaceMembership = {
   workspace_id: string;
   role: WorkspaceRole;
-  workspaces?: { name?: string | null } | { name?: string | null }[] | null;
+  workspaces?:
+    | { name?: string | null; owner_id?: string | null }
+    | { name?: string | null; owner_id?: string | null }[]
+    | null;
 };
 
 export type AuthorizedWorkspaceContext = {
   workspaceId: string;
   workspaceName: string;
+  workspaceOwnerId: string;
   userId: string;
   userFullName: string;
   role: WorkspaceRole;
@@ -24,7 +28,7 @@ type AuthenticatedUserIdentity = {
 
 function firstWorkspace(
   value: ActiveWorkspaceMembership["workspaces"]
-): { name?: string | null } | null {
+): { name?: string | null; owner_id?: string | null } | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
 }
@@ -45,9 +49,13 @@ export function workspaceContextFromMembership(
   }
 
   const workspace = firstWorkspace(membership.workspaces);
+  if (!workspace?.owner_id) {
+    throw new Error("The active workspace owner could not be verified.");
+  }
   return {
     workspaceId: membership.workspace_id,
     workspaceName: workspace?.name?.trim() || "Workspace",
+    workspaceOwnerId: workspace.owner_id,
     userId: user.id,
     userFullName: user.user_metadata?.full_name?.trim() || "Unknown",
     role: membership.role
