@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { appUrl } from "@/lib/env";
+import { shouldApplyStripeEvent } from "@/lib/stripe-webhook";
 import {
   WORKSPACE_PLAN_DEFINITIONS,
   normalizePlanKey,
@@ -21,6 +22,7 @@ export type BillingSyncResult = {
 type SyncContext = {
   eventId?: string | null;
   eventType: string;
+  eventCreatedAt?: string | null;
 };
 
 type WorkspaceRow = {
@@ -256,7 +258,7 @@ async function recordBillingAudit(
     reason: payload.reason ?? null
   });
 
-  if (error) throw new Error(error.message);
+  if (error && error.code !== "23505") throw new Error(error.message);
 }
 
 export async function ensureStripeCustomerForWorkspace(input: {
@@ -383,6 +385,11 @@ export async function syncWorkspaceSubscriptionFromStripeSubscription(
   }
 
   const existing = await getSubscription(admin, workspaceId);
+  const persistedEventCreatedAt = (existing as (WorkspaceSubscription & { stripe_last_event_created_at?: string | null }) | null)
+    ?.stripe_last_event_created_at;
+  if (!shouldApplyStripeEvent(context.eventCreatedAt, persistedEventCreatedAt)) {
+    return { status: "skipped", workspaceId, message: "A newer Stripe subscription event is already applied." };
+  }
   const stripeStatus = readString(subscriptionRecord, "status");
   const status = mapStripeSubscriptionStatus(stripeStatus);
   const planKey = normalizePlanKey(metadataValue(subscriptionRecord, "plan_key") ?? planKeyFromStripePriceId(priceId) ?? existing?.plan_key);
@@ -414,6 +421,7 @@ export async function syncWorkspaceSubscriptionFromStripeSubscription(
     stripe_latest_invoice_id: latestInvoiceId,
     stripe_cancel_at_period_end: cancelAtPeriodEnd,
     stripe_last_event_id: context.eventId ?? null,
+    stripe_last_event_created_at: context.eventCreatedAt ?? null,
     stripe_synced_at: now,
     status_reason: `Stripe ${context.eventType}`,
     updated_at: now
@@ -470,6 +478,16 @@ export async function syncWorkspaceBillingInvoiceFromStripeInvoice(
     return { status: "skipped", message: "Stripe invoice is not linked to a Qaffel workspace." };
   }
 
+  const { data: existingInvoice, error: existingInvoiceError } = await admin
+    .from("workspace_billing_invoices")
+    .select("stripe_last_event_created_at")
+    .eq("stripe_invoice_id", invoiceId)
+    .maybeSingle();
+  if (existingInvoiceError) throw new Error(existingInvoiceError.message);
+  if (!shouldApplyStripeEvent(context.eventCreatedAt, existingInvoice?.stripe_last_event_created_at)) {
+    return { status: "skipped", workspaceId, message: "A newer Stripe invoice event is already applied." };
+  }
+
   const period = invoicePeriod(invoice);
   const status = readString(invoiceRecord, "status");
   const invoicePayload = {
@@ -487,6 +505,7 @@ export async function syncWorkspaceBillingInvoiceFromStripeInvoice(
     period_start: period.periodStart,
     period_end: period.periodEnd,
     invoice_created_at: stripeUnixToIso(readNumber(invoiceRecord, "created")),
+    stripe_last_event_created_at: context.eventCreatedAt ?? null,
     updated_at: new Date().toISOString()
   };
 
@@ -516,7 +535,11 @@ export async function syncWorkspaceBillingInvoiceFromStripeInvoice(
 }
 
 export async function processStripeWebhookEvent(admin: SupabaseClient, event: Stripe.Event): Promise<BillingSyncResult> {
-  const context = { eventId: event.id, eventType: event.type };
+  const context = {
+    eventId: event.id,
+    eventType: event.type,
+    eventCreatedAt: stripeUnixToIso(event.created)
+  };
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;

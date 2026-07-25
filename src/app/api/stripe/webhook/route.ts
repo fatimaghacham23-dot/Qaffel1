@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, getStripeWebhookSecret, processStripeWebhookEvent, stripeObjectId } from "@/lib/billing-stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { claimStripeWebhookEvent } from "@/lib/stripe-webhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,35 +52,18 @@ export async function POST(request: NextRequest) {
   const eventObject = event.data.object as unknown;
   const objectId = stripeEventObjectId(eventObject);
 
-  const { error: insertError } = await supabase.from("stripe_webhook_events").insert({
-    stripe_event_id: event.id,
-    event_type: event.type,
-    object_id: objectId,
-    status: "processing"
-  });
-
-  if (insertError) {
-    if (insertError.code === "23505") {
-      const { data: existing, error: existingError } = await supabase
-        .from("stripe_webhook_events")
-        .select("status")
-        .eq("stripe_event_id", event.id)
-        .maybeSingle();
-
-      if (existingError) {
-        return NextResponse.json({ error: existingError.message }, { status: 500 });
-      }
-
-      if (existing?.status === "failed") {
-        await markWebhookEvent(supabase, event.id, "processing");
-      } else {
-        return NextResponse.json({ received: true, duplicate: true, status: existing?.status ?? "processing" });
-      }
-    } else {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+  try {
+    const claim = await claimStripeWebhookEvent(supabase, {
+      eventId: event.id,
+      eventType: event.type,
+      objectId
+    });
+    if (!claim.claimed) {
+      return NextResponse.json({ received: true, duplicate: true, status: claim.status });
     }
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
-
   try {
     const result = await processStripeWebhookEvent(supabase, event);
     await markWebhookEvent(supabase, event.id, result.status);
