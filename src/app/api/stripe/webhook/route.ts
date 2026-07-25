@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe, getStripeWebhookSecret, processStripeWebhookEvent, stripeObjectId } from "@/lib/billing-stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { claimStripeWebhookEvent } from "@/lib/stripe-webhook";
+import { logStructured } from "@/lib/structured-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,9 +12,6 @@ function stripeEventObjectId(eventObject: unknown) {
   return stripeObjectId(eventObject) ?? null;
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Unknown Stripe webhook error.";
-}
 
 async function markWebhookEvent(
   supabase: ReturnType<typeof createAdminClient>,
@@ -45,7 +43,10 @@ export async function POST(request: NextRequest) {
   try {
     event = getStripe().webhooks.constructEvent(rawBody, signature, getStripeWebhookSecret());
   } catch (error) {
-    return NextResponse.json({ error: `Stripe webhook verification failed: ${errorMessage(error)}` }, { status: 400 });
+    logStructured("warn", "stripe.webhook_signature_rejected", {
+      errorType: error instanceof Error ? error.name : "unknown"
+    });
+    return NextResponse.json({ error: "Invalid Stripe signature." }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -62,15 +63,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, duplicate: true, status: claim.status });
     }
   } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    logStructured("error", "stripe.webhook_claim_failed", {
+      eventId: event.id,
+      eventType: event.type,
+      errorType: error instanceof Error ? error.name : "unknown"
+    });
+    return NextResponse.json({ error: "Webhook claim failed." }, { status: 500 });
   }
+
   try {
     const result = await processStripeWebhookEvent(supabase, event);
     await markWebhookEvent(supabase, event.id, result.status);
     return NextResponse.json({ received: true, status: result.status, workspaceId: result.workspaceId ?? null });
   } catch (error) {
-    const message = errorMessage(error);
-    await markWebhookEvent(supabase, event.id, "failed", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    logStructured("error", "stripe.webhook_processing_failed", {
+      eventId: event.id,
+      eventType: event.type,
+      objectId,
+      errorType: error instanceof Error ? error.name : "unknown"
+    });
+    await markWebhookEvent(supabase, event.id, "failed", "Webhook processing failed.");
+    return NextResponse.json({ error: "Webhook processing failed." }, { status: 500 });
   }
 }
