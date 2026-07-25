@@ -3,7 +3,7 @@ import { supabaseServiceRoleKey, supabaseUrl } from "@/lib/env";
 
 export function createAdminClient() {
   if (!supabaseServiceRoleKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for server-side billing sync.");
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for privileged server operations.");
   }
 
   return createClient(supabaseUrl, supabaseServiceRoleKey, {

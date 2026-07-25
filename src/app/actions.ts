@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, requireUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { requirePermission, type WorkspaceRole } from "@/lib/permissions";
 import { assertResourceInWorkspace } from "@/lib/workspace-authorization";
@@ -1524,7 +1525,7 @@ export async function deleteServicePresetAction(formData: FormData) {
 }
 
 export async function uploadProofAction(formData: FormData) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const publicToken = text(formData, "token");
   const file = formData.get("proof");
 
@@ -1544,7 +1545,7 @@ export async function uploadProofAction(formData: FormData) {
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, user_id, status, valid_until, document_type")
+    .select("id, user_id, workspace_id, status, valid_until, document_type")
     .eq("public_token", publicToken)
     .single();
 
@@ -1621,13 +1622,15 @@ export async function uploadProofAction(formData: FormData) {
   }
   await assertOk(proofError);
 
-  await createInvoiceEvent({
-    invoiceId: invoice.id,
-    userId: invoice.user_id,
-    eventType: "proof_uploaded",
+  const { error: eventError } = await supabase.from("invoice_events").insert({
+    invoice_id: invoice.id,
+    user_id: invoice.user_id,
+    workspace_id: invoice.workspace_id,
+    event_type: "proof_uploaded",
     message: "Payment proof uploaded by client",
     metadata: { method: formData.get("method") }
   });
+  await assertOk(eventError);
 
   revalidatePath(`/pay/${publicToken}`);
   redirect(`/pay/${publicToken}?uploaded=1`);

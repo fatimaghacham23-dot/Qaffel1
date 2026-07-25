@@ -20,6 +20,8 @@ import { buildPublicPaymentTimeline, formatMethodListForHelper, publicPaymentPha
 import { toPublicPaymentMethodOption } from "@/lib/public-pay-method";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { parsePublicPaymentPageData } from "@/lib/public-payment-page";
 import { parsePaymentPlan } from "@/lib/payment-plan";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
 import { notFound } from "next/navigation";
@@ -48,37 +50,20 @@ export default async function PublicInvoicePage({
   const proofUploaded = resolvedSearchParams.uploaded === "1";
   const preferredMethodType = (resolvedSearchParams.method || "").toLowerCase();
   const supabase = await createClient();
-  const { data: invoice } = await supabase
-    .from("invoices")
-    .select(
-      "id, user_id, public_token, invoice_number, title, description, amount_usd, amount_lbp, currency, due_date, status, document_type, approval_status, valid_until, exchange_rate_lbp_per_usd, rate_note, approved_at, approved_by_name, approved_note, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, deposit_note, created_at, payment_plan, clients(name)"
-    )
-    .eq("public_token", token)
-    .maybeSingle();
+  const { data: paymentPageRaw, error: paymentPageError } = await supabase.rpc("get_public_payment_page", {
+    p_token: token
+  });
+  const paymentPage = paymentPageError ? null : parsePublicPaymentPageData(paymentPageRaw, token);
 
-  if (!invoice) {
+  if (!paymentPage) {
     notFound();
   }
 
-  const [{ data: profile }, { data: proofs }, { data: methods }, { data: acceptedPayments }, { data: reviewStatsRaw }] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select(
-          "business_name, full_name, phone, logo_storage_path, brand_color, brand_accent, business_tagline, business_website, instagram_handle, whatsapp_phone, support_email, invoice_footer_note, document_theme, business_hours, business_city"
-        )
-        .eq("id", invoice.user_id)
-        .maybeSingle(),
-      supabase.from("payment_proofs").select("status, amount_usd, amount_lbp").eq("invoice_id", invoice.id).order("uploaded_at", { ascending: false }),
-      supabase
-        .from("payment_methods")
-        .select("type, label, instructions, receiver_name, receiver_phone, account_reference, qr_image_path, external_link")
-        .eq("user_id", invoice.user_id)
-        .eq("is_active", true)
-        .order("created_at", { ascending: true }),
-      supabase.rpc("get_public_payment_history_by_token", { p_token: token }),
-      supabase.rpc("get_public_merchant_proof_review_stats", { p_public_invoice_token: token })
-    ]);
+  const { invoice, profile, proofs, methods } = paymentPage;
+  const [{ data: acceptedPayments }, { data: reviewStatsRaw }] = await Promise.all([
+    supabase.rpc("get_public_payment_history_by_token", { p_token: token }),
+    supabase.rpc("get_public_merchant_proof_review_stats", { p_public_invoice_token: token })
+  ]);
 
   const balance = getRemainingBalance(invoice, proofs || []);
   const reconciledStatus = reconcileInvoiceStatus(invoice, proofs || []);
@@ -140,7 +125,7 @@ export default async function PublicInvoicePage({
 
   const businessName = profile?.business_name || profile?.full_name || "Payment request";
 
-  const logoUrl = await signBrandLogoUrl(supabase, profile?.logo_storage_path ?? null);
+  const logoUrl = await signBrandLogoUrl(createAdminClient(), profile?.logo_storage_path ?? null);
   const brandColor = sanitizeHexColor(profile?.brand_color ?? undefined, "#116466");
   const brandAccent = profile?.brand_accent ? sanitizeHexColor(profile.brand_accent, brandColor) : null;
   const docTheme = normalizeDocumentTheme(profile?.document_theme ?? undefined);

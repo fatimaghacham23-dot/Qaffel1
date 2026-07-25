@@ -36,6 +36,7 @@ This manifest is the canonical repository order for Qaffel database changes. App
 | 30 | `20260515234500_operational_presence.sql` | Operational presence |
 | 31 | `20260518120000_workspace_billing_foundation.sql` | Workspace billing foundation |
 | 32 | `20260518133000_stripe_billing_sync.sql` | Stripe billing synchronization |
+| 33 | `20260725090000_public_payment_security_hardening.sql` | Token-scoped public payment data and private proof storage |
 
 ## Rehearsal requirement
 
