@@ -18,7 +18,7 @@ interface ProofUploadFormProps {
 }
 
 const ACCEPT = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-const ACCEPT_LABEL = "JPG, PNG, WebP, or PDF - max 5 MB";
+
 
 const uploadCopy = {
   en: {
@@ -27,7 +27,7 @@ const uploadCopy = {
     amountUsdLabel: "Amount paid USD", amountLbpLabel: "Amount paid LBP", paymentDate: "Payment date", method: "Method used", selectMethod: "Select method",
     proof: "Screenshot or PDF", note: "Note (optional)", upload: "Submit payment proof", choose: "Choose proof to continue", uploading: "Uploading...",
     ready: "Proof ready to submit", tap: "Tap to choose a receipt or screenshot", selected: "Selected:", remove: "Remove selected proof",
-    what: "What happens after upload?", review: "Uploads are reviewed manually and are never auto-approved."
+    what: "What happens after upload?", review: "Uploads are reviewed manually and are never auto-approved.", attached: "Your proof is attached to this invoice for the business to review.", accepted: "JPG, PNG, WebP, or PDF - max 5 MB", optionalPartial: "Optional, but helpful for partial payments.", optionalLbp: "Optional, but helpful for LBP transfers.", reviewBeforeSubmit: "Review the amount and method above, then submit.", proofHint: "A clear receipt, transfer confirmation, or payment screenshot works best.", preview: "Upload preview", notePlaceholder: "Reference, sender name, or other context...", balanceUpdate: "Once accepted, the invoice balance updates and a receipt can be issued."
   },
   ar: {
     missing: "\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0623\u0648 \u0625\u064a\u0635\u0627\u0644.", invalid: "\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0645\u0644\u0641 JPG \u0623\u0648 PNG \u0623\u0648 WebP \u0623\u0648 PDF.", tooLarge: "\u0627\u0644\u0645\u0644\u0641 \u0643\u0628\u064a\u0631 \u062c\u062f\u0627\u064b. \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 5 \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a.",
@@ -35,7 +35,7 @@ const uploadCopy = {
     amountUsdLabel: "\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0645\u062f\u0641\u0648\u0639 \u0628\u0627\u0644\u062f\u0648\u0644\u0627\u0631", amountLbpLabel: "\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0645\u062f\u0641\u0648\u0639 \u0628\u0627\u0644\u0644\u064a\u0631\u0629", paymentDate: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u062f\u0641\u0639", method: "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639", selectMethod: "\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639",
     proof: "\u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0623\u0648 \u0645\u0644\u0641 PDF", note: "\u0645\u0644\u0627\u062d\u0638\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)", upload: "\u0625\u0631\u0633\u0627\u0644 \u0625\u062b\u0628\u0627\u062a \u0627\u0644\u062f\u0641\u0639", choose: "\u0627\u062e\u062a\u0631 \u0625\u062b\u0628\u0627\u062a\u0627\u064b \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629", uploading: "\u062c\u0627\u0631\u064d \u0627\u0644\u0631\u0641\u0639...",
     ready: "\u0625\u062b\u0628\u0627\u062a \u0627\u0644\u062f\u0641\u0639 \u062c\u0627\u0647\u0632 \u0644\u0644\u0625\u0631\u0633\u0627\u0644", tap: "\u0627\u0636\u063a\u0637 \u0644\u0627\u062e\u062a\u064a\u0627\u0631 \u0625\u064a\u0635\u0627\u0644 \u0623\u0648 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629", selected: "\u062a\u0645 \u0627\u0644\u0627\u062e\u062a\u064a\u0627\u0631:", remove: "\u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0625\u062b\u0628\u0627\u062a \u0627\u0644\u0645\u062d\u062f\u062f",
-    what: "\u0645\u0627\u0630\u0627 \u064a\u062d\u062f\u062b \u0628\u0639\u062f \u0627\u0644\u0631\u0641\u0639\u061f", review: "\u062a\u062a\u0645 \u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u0625\u062b\u0628\u0627\u062a\u0627\u062a \u064a\u062f\u0648\u064a\u0627\u064b \u0648\u0644\u0627 \u062a\u062a\u0645 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629 \u0639\u0644\u064a\u0647\u0627 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b."
+    what: "\u0645\u0627\u0630\u0627 \u064a\u062d\u062f\u062b \u0628\u0639\u062f \u0627\u0644\u0631\u0641\u0639\u061f", review: "\u062a\u062a\u0645 \u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u0625\u062b\u0628\u0627\u062a\u0627\u062a \u064a\u062f\u0648\u064a\u0627\u064b \u0648\u0644\u0627 \u062a\u062a\u0645 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629 \u0639\u0644\u064a\u0647\u0627 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b.", attached: "\u064a\u0631\u062a\u0628\u0637 \u0625\u062b\u0628\u0627\u062a\u0643 \u0628\u0647\u0630\u0647 \u0627\u0644\u0641\u0627\u062a\u0648\u0631\u0629 \u0644\u064a\u0631\u0627\u062c\u0639\u0647 \u0627\u0644\u0646\u0634\u0627\u0637 \u0627\u0644\u062a\u062c\u0627\u0631\u064a.", accepted: "JPG\u060c PNG\u060c WebP \u0623\u0648 PDF \u2014 \u0628\u062d\u062f \u0623\u0642\u0635\u0649 5 \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a", optionalPartial: "\u0627\u062e\u062a\u064a\u0627\u0631\u064a\u060c \u0648\u0644\u0643\u0646\u0647 \u0645\u0641\u064a\u062f \u0644\u0644\u062f\u0641\u0639\u0627\u062a \u0627\u0644\u062c\u0632\u0626\u064a\u0629.", optionalLbp: "\u0627\u062e\u062a\u064a\u0627\u0631\u064a\u060c \u0648\u0644\u0643\u0646\u0647 \u0645\u0641\u062f \u0644\u0644\u062a\u062d\u0648\u064a\u0644\u0627\u062a \u0628\u0627\u0644\u0644\u064a\u0631\u0629 \u0627\u0644\u0644\u0628\u0646\u0627\u0646\u064a\u0629.", reviewBeforeSubmit: "\u0631\u0627\u062c\u0639 \u0627\u0644\u0645\u0628\u0644\u063a \u0648\u0627\u0644\u0637\u0631\u064a\u0642\u0629 \u062b\u0645 \u0623\u0631\u0633\u0644 \u0627\u0644\u0625\u062b\u0628\u0627\u062a.", proofHint: "\u0627\u0633\u062a\u062e\u062f\u0645 \u0625\u064a\u0635\u0627\u0644\u0627\u064b \u0648\u0627\u0636\u062d\u0627\u064b \u0623\u0648 \u062a\u0623\u0643\u064a\u062f \u062a\u062d\u0648\u064a\u0644 \u0623\u0648 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629.", preview: "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0645\u0644\u0641", notePlaceholder: "\u0627\u0644\u0645\u0631\u062c\u0639 \u0623\u0648 \u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u0633\u0644 \u0623\u0648 \u0623\u064a \u0633\u064a\u0627\u0642 \u0622\u062e\u0631...", balanceUpdate: "\u0628\u0639\u062f \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629\u060c \u064a\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0631\u0635\u064a\u062f \u0627\u0644\u0641\u0627\u062a\u0648\u0631\u0629 \u0648\u064a\u0645\u0643\u0646 \u0625\u0635\u062f\u0627\u0631 \u0625\u064a\u0635\u0627\u0644."
   }
 } as const;
 
@@ -169,7 +169,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
         <ol className="mt-2 grid gap-2">
           <li className="flex gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cedar" aria-hidden />
-            <span>Your proof is attached to this invoice for the business to review.</span>
+            <span>{copy.attached}</span>
           </li>
           <li className="flex gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cedar" aria-hidden />
@@ -177,7 +177,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           </li>
           <li className="flex gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cedar" aria-hidden />
-            <span>Once accepted, the invoice balance updates and a receipt can be issued.</span>
+            <span>{copy.balanceUpdate}</span>
           </li>
         </ol>
       </div>
@@ -200,7 +200,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
               defaultValue={defaultAmountUsd || ""}
               disabled={isUploading}
             />
-            <p className="mt-1 text-[10px] text-slate-500">Optional, but helpful for partial payments.</p>
+            <p className="mt-1 text-[10px] text-slate-500">{copy.optionalPartial}</p>
           </div>
           <div>
             <label className="label" htmlFor="amount_lbp">
@@ -217,7 +217,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
               defaultValue={defaultAmountLbp || ""}
               disabled={isUploading}
             />
-            <p className="mt-1 text-[10px] text-slate-500">Optional, but helpful for LBP transfers.</p>
+            <p className="mt-1 text-[10px] text-slate-500">{copy.optionalLbp}</p>
           </div>
         </div>
 
@@ -256,7 +256,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
             <label className="label mb-0" htmlFor="proof">
               {copy.proof}
             </label>
-            <span className="text-[10px] font-semibold text-slate-500">{ACCEPT_LABEL}</span>
+            <span className="text-[10px] font-semibold text-slate-500">{copy.accepted}</span>
           </div>
           <input
             ref={inputRef}
@@ -295,7 +295,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
             )}
             <span className="text-sm font-semibold text-ink">{file ? copy.ready : copy.tap}</span>
             <span className="max-w-xs text-xs leading-relaxed text-slate-500">
-              {file ? "Review the amount and method above, then submit." : "A clear receipt, transfer confirmation, or payment screenshot works best."}
+              {file ? copy.reviewBeforeSubmit : copy.proofHint}
             </span>
           </button>
 
@@ -313,7 +313,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           {previewUrl ? (
             <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
               {/* eslint-disable-next-line @next/next/no-img-element -- client preview blob URL */}
-              <img src={previewUrl} alt="Upload preview" className="mx-auto max-h-48 w-auto object-contain" />
+              <img src={previewUrl} alt={copy.preview} className="mx-auto max-h-48 w-auto object-contain" />
             </div>
           ) : null}
         </div>
@@ -322,7 +322,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           <label className="label" htmlFor="note">
             {copy.note}
           </label>
-          <textarea className="field min-h-24" id="note" name="note" disabled={isUploading} placeholder="Reference, sender name, or other context..." />
+          <textarea className="field min-h-24" id="note" name="note" disabled={isUploading} placeholder={copy.notePlaceholder} />
         </div>
 
         {isUploading ? (

@@ -302,6 +302,7 @@ export default async function PublicInvoicePage({
               tagline={profile?.business_tagline}
               logoUrl={logoUrl}
               reviewStats={reviewStats}
+              lang={lang}
             />
 
             <div className="mt-4">

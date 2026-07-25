@@ -3,6 +3,16 @@ import { E2E_PASSWORD, E2E_USERS } from "./fixtures";
 import { hostedE2ESafetyError, isHostedE2E } from "@/lib/e2e-production-safe";
 
 export default async function globalSetup() {
+  const hostedSafetyError = hostedE2ESafetyError();
+  if (hostedSafetyError) {
+    throw new Error(hostedSafetyError);
+  }
+
+  if (isHostedE2E()) {
+    throw new Error(
+      "Hosted QA execution requires the dedicated production-safe test suite; local fixture setup is intentionally disabled."
+    );
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceRole) {

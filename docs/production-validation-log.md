@@ -68,3 +68,25 @@ The local PostgreSQL image was removed and pulled again. Its filesystem can exec
 | `npm run lint` | 0 | Passed with one pre-existing font-loading warning in `src/app/layout.tsx`. |
 | `npm run build` | 0 | Production build completed; 32 routes generated. |
 | `npm audit --omit=dev` | not run | Not executed because the local validation authorization did not include sending dependency metadata to the npm audit service. |
+
+## 2026-07-25 — non-Docker hardening checkpoint
+
+No hosted Supabase, Stripe, storage, or customer-data mutation was performed.
+
+| Command | Exit | Result |
+|---|---:|---|
+| `npm run typecheck` | 0 | Passed. |
+| `npm test` | 0 | 30 files and 118 tests passed. |
+| `npm run lint` | 0 | Passed with one existing font-loading warning in `src/app/layout.tsx`. |
+| `npm run build` | 0 | Passed; 32 application routes generated. |
+| `npm run migrations:check` | 0 | 36 ordered migrations match `MIGRATIONS.md`. |
+| `npx playwright test --list` | 0 | Discovered 9 tests only; no browser tests executed. |
+| `npm audit --omit=dev` | not run | Not run: this environment requires explicit approval before sending dependency metadata to the external npm advisory service. |
+
+### Hosted test safety
+
+The legacy Playwright global setup is restricted to a disposable localhost Supabase stack. It now rejects a hosted target before any fixture reset or admin action. Hosted execution also requires `E2E_PRODUCTION_SAFE=true`, the exact workspace name `QAFFEL_AUTOMATED_QA`, a QA workspace ID, and dedicated QA owner credentials. No such QA configuration is present locally, so hosted Playwright executed/passed/failed/skipped counts are **0/0/0/9 blocked** (the 9 is the discovered suite, not a skipped Playwright result).
+
+### Arabic public payment
+
+The public payment route accepts only `?lang=en` and `?lang=ar`, preserves existing safe query parameters when switching, sets `lang` and `dir` at the document and page-scope levels, and localizes the proof-upload workflow including validation, file-size/type errors, upload state, review explanation, amount fields, receipt hint, preview label, and note field. Currency values remain formatted through the existing USD/LBP payment path. Browser/mobile visual validation remains pending a dedicated QA public token or safe local stack.
