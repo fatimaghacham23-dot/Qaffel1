@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { ClientsContactsTable, type ClientContactsTableItem } from "@/components/ClientsContactsTable";
-import { SettingsPageHeader } from "@/components/SettingsPageHeader";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { isQuoteDocument } from "@/lib/documents";
 import { getClientHealth, type ClientHealth } from "@/lib/operations";
@@ -90,31 +91,20 @@ export default async function ClientsPage() {
 
   return (
     <AppShell>
-      <SettingsPageHeader
-        title="Clients"
-        subtitle="View client balances and payment history."
-        action={
-          <Link className="btn btn-primary w-full sm:w-auto" href="/clients/new">
-            New client
-          </Link>
-        }
-      />
-
-      <div className="mb-6 rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-card backdrop-blur sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-ink">Client data readiness</p>
-            <p className="mt-1.5 text-sm text-slate-600">Contact gaps and balance attention are flagged before follow-up.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge status={missingPhoneCount > 0 ? "warning" : "complete"} label={missingPhoneCount > 0 ? `${missingPhoneCount} missing phone` : "Phones complete"} />
-            <StatusBadge status={missingEmailCount > 0 ? "warning" : "complete"} label={missingEmailCount > 0 ? `${missingEmailCount} missing email` : "Emails complete"} />
-            <StatusBadge status={balanceDueCount > 0 ? "warning" : "complete"} label={balanceDueCount > 0 ? `${balanceDueCount} balance attention` : "No open balances"} />
+      <PageContainer width="wide">
+        <PageHeader title="Clients" description="View client balances and payment history." actions={<Link className="btn btn-primary w-full sm:w-auto" href="/clients/new">New client</Link>} />
+        <div className="mb-6 rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-card backdrop-blur sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div><p className="text-sm font-semibold text-ink">Client data readiness</p><p className="mt-1.5 text-sm text-slate-600">Contact gaps and balance attention are flagged before follow-up.</p></div>
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge status={missingPhoneCount > 0 ? "warning" : "complete"} label={missingPhoneCount > 0 ? `${missingPhoneCount} missing phone` : "Phones complete"} />
+              <StatusBadge status={missingEmailCount > 0 ? "warning" : "complete"} label={missingEmailCount > 0 ? `${missingEmailCount} missing email` : "Emails complete"} />
+              <StatusBadge status={balanceDueCount > 0 ? "warning" : "complete"} label={balanceDueCount > 0 ? `${balanceDueCount} balance attention` : "No open balances"} />
+            </div>
           </div>
         </div>
-      </div>
-
-      <ClientsContactsTable clients={clientRows} />
+        <ClientsContactsTable clients={clientRows} />
+      </PageContainer>
     </AppShell>
   );
 }

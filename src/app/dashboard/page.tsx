@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { DashboardHome } from "@/components/DashboardHome";
+import { PageContainer } from "@/components/layout/PageContainer";
 import {
   DASHBOARD_ASSIGNMENT_LIMIT,
   DASHBOARD_EVENT_QUERY_LIMIT,
@@ -191,19 +192,21 @@ export default async function DashboardPage() {
 
   return (
     <AppShell role={ctx.role}>
-      <DashboardHome
-        greeting={dashboardGreeting(now.getHours())}
-        name={firstName(ctx.userFullName)}
-        summary={summary}
-        capabilities={capabilities}
-        metrics={metrics}
-        attention={attention}
-        activity={activity}
-        onboarding={onboarding}
-        cashFlow={cashFlow.points}
-        cashFlowCurrency={cashFlow.currency}
-        partialData={partialData}
-      />
+      <PageContainer width="wide">
+        <DashboardHome
+          greeting={dashboardGreeting(now.getHours())}
+          name={firstName(ctx.userFullName)}
+          summary={summary}
+          capabilities={capabilities}
+          metrics={metrics}
+          attention={attention}
+          activity={activity}
+          onboarding={onboarding}
+          cashFlow={cashFlow.points}
+          cashFlowCurrency={cashFlow.currency}
+          partialData={partialData}
+        />
+      </PageContainer>
     </AppShell>
   );
 }

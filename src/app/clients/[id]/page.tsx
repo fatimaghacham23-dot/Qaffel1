@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, FilePlus2, Mail, MessageCircle, Phone, ReceiptText, UserRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PrintButton } from "@/components/PrintButton";
 import { ClientStatementCsvExport } from "@/components/ClientStatementCsvExport";
@@ -280,11 +282,9 @@ export default async function ClientDetailPage({
 
   return (
     <AppShell>
+      <PageContainer width="wide">
+        <PageHeader title={client.name || "Client"} eyebrow="Client profile" backHref="/clients" />
       <div className="mb-6 grid gap-4 print:hidden">
-        <Link className="text-sm font-semibold text-cedar" href="/clients">
-          Back to clients
-        </Link>
-
         <div
           className={`rounded-2xl border p-4 shadow-card ${
             clientHealth === "risk"
@@ -310,7 +310,7 @@ export default async function ClientDetailPage({
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Client profile</p>
-                  <h1 className="truncate text-3xl font-bold tracking-normal text-ink lg:text-4xl">{client.name}</h1>
+                  <h2 className="truncate text-3xl font-bold tracking-normal text-ink lg:text-4xl">{client.name}</h2>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -629,6 +629,7 @@ export default async function ClientDetailPage({
           )}
         </aside>
       </div>
+      </PageContainer>
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           body { background: white !important; color: black !important; }
