@@ -36,4 +36,9 @@ export function buildEligibleReceiptUrl(payment: { status?: string | null; voide
   return buildReceiptUrl(payment.receipt_token, locale);
 }
 export function buildClientPortalUrl(token: string, locale?: PublicLocale) { return withLocale("client/:token", token, locale); }
+
+export function buildEligibleClientPortalUrl(token?: string | null, locale?: PublicLocale) {
+  if (!token) return null;
+  return buildClientPortalUrl(token, locale);
+}
 export function buildSharedReportUrl(token: string, locale?: PublicLocale) { return withLocale("share/report/:token", token, locale); }

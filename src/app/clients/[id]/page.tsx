@@ -25,6 +25,7 @@ import {
 import { ClientContextRelationshipPanel, ClientMemoryTimeline } from "@/components/workspace/ClientContextTimeline";
 import { ClientWorkspaceNotesPanel } from "@/components/workspace/ClientWorkspaceNotesPanel";
 import { WorkspaceMessageTemplatesCard } from "@/components/workspace/WorkspaceMessageTemplatesCard";
+import { buildEligibleClientPortalUrl } from "@/lib/urls";
 
 function ClientFlag({ tone, label }: { tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }) {
   const tones = {
@@ -164,8 +165,7 @@ export default async function ClientDetailPage({
     };
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const portalUrl = client.client_portal_token ? `${baseUrl}/client/${client.client_portal_token}` : null;
+  const portalUrl = buildEligibleClientPortalUrl(client.client_portal_token);
   const clientWhatsAppUrl = whatsappHref(client.phone);
   const acceptedPaymentCount = invoices.reduce(
     (count: number, inv: any) => count + (inv.payment_proofs || []).filter((proof: any) => proof.status === "accepted").length,
