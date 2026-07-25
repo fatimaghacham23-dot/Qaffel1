@@ -1,0 +1,11 @@
+import type { ReactNode } from "react";
+
+export type ResponsiveDataColumn<Row> = { key: string; label: string; render: (row: Row) => ReactNode; primary?: boolean; numeric?: boolean };
+
+/** Renders one semantic desktop table or one mobile card list, never both at once. */
+export function ResponsiveDataList<Row>({ rows, columns, rowKey, actions, emptyState = "No records found.", loading = false, compact = false }: { rows: Row[]; columns: ResponsiveDataColumn<Row>[]; rowKey: (row: Row) => string; actions?: (row: Row) => ReactNode; emptyState?: ReactNode; loading?: boolean; compact?: boolean }) {
+  if (loading) return <div aria-busy="true" className="q-surface p-5 text-sm text-slate-500">Loading records…</div>;
+  if (!rows.length) return <div className="q-surface p-5 text-sm text-slate-500">{emptyState}</div>;
+  const padding = compact ? "p-3" : "p-4";
+  return <><div className="hidden overflow-x-auto md:block"><table className="w-full text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">{columns.map((column) => <th key={column.key} className={column.numeric ? "p-3 text-right" : "p-3"}>{column.label}</th>)}{actions ? <th className="p-3"><span className="sr-only">Actions</span></th> : null}</tr></thead><tbody>{rows.map((row) => <tr key={rowKey(row)} className="border-b border-slate-100 last:border-0">{columns.map((column) => <td key={column.key} className={(column.numeric ? "p-3 text-right tabular-nums" : "p-3 break-words")}>{column.render(row)}</td>)}{actions ? <td className="p-3">{actions(row)}</td> : null}</tr>)}</tbody></table></div><div className="grid gap-3 md:hidden">{rows.map((row) => <article key={rowKey(row)} className={`q-mobile-card ${padding}`}>{columns.map((column) => <div key={column.key} className="flex min-w-0 items-start justify-between gap-4 py-1"><span className="shrink-0 text-xs font-semibold text-slate-500">{column.label}</span><span className={column.numeric ? "min-w-0 break-words text-right tabular-nums" : "min-w-0 break-words text-right"}>{column.render(row)}</span></div>)}{actions ? <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">{actions(row)}</div> : null}</article>)}</div></>;
+}
