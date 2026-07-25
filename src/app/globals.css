@@ -134,6 +134,15 @@ html {
   }
 }
 
+html, body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+img, svg, canvas {
+  max-width: 100%;
+}
+
 body {
   margin: 0;
   background:
@@ -302,7 +311,16 @@ select {
   @apply text-sm font-medium leading-relaxed text-slate-600 sm:text-[0.9375rem];
 }
 
-.q-body {
+.q-html, body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+img, svg, canvas {
+  max-width: 100%;
+}
+
+body {
   @apply text-sm leading-relaxed text-slate-700;
 }
 
@@ -720,4 +738,11 @@ body:has(.public-page-shell) header[data-app-header] {
   .dark {
     --destructive-foreground: oklch(1 0 0);
   }
+}
+
+[dir="rtl"] .q-mobile-navigation-drawer {
+  left: 0;
+  right: auto;
+  border-left-width: 0;
+  border-right-width: 1px;
 }

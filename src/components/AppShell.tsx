@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CircleDollarSign, FileSpreadsheet, LayoutDashboard, Menu, ReceiptText, Settings, Users, X } from "lucide-react";
@@ -15,10 +15,21 @@ const active = (pathname: string, href: string) => href === "/dashboard" ? pathn
 export function AppShell({ children, role = "owner" }: { children: React.ReactNode; role?: WorkspaceRole | null }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const desktopItems = navigationForRole(role);
   const mobileItems = mobileNavigationForRole(role);
   const moreItems = desktopItems.filter((item) => !item.mobile);
   const linkClass = (selected: boolean) => cn("group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-ink", selected && "bg-cedar/[0.08] font-semibold text-cedar");
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setMoreOpen(false); };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    drawerCloseRef.current?.focus();
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown); };
+  }, [moreOpen]);
 
   return <main className="mx-auto grid min-w-0 w-full max-w-none gap-6 px-4 py-6 pb-[max(6.5rem,calc(env(safe-area-inset-bottom,0px)+6rem))] sm:px-6 md:grid-cols-[256px_minmax(0,1fr)] md:gap-8 md:pb-8 lg:px-8 2xl:px-10 print:block print:max-w-none print:p-0">
     <aside className="hidden h-fit rounded-2xl border border-slate-200/50 bg-white/[0.88] p-4 backdrop-blur-xl print:hidden md:sticky md:top-[4.5rem] md:block" style={{ boxShadow: "var(--q-shadow-card)" }}>
@@ -27,9 +38,11 @@ export function AppShell({ children, role = "owner" }: { children: React.ReactNo
       <div className="mt-5 border-t border-slate-100/50 pt-4"><SignOutButton /></div>
     </aside>
     <section className="min-w-0 w-full max-w-none q-safe-bottom">{children}</section>
+    <button aria-controls="mobile-navigation-drawer" aria-expanded={moreOpen} aria-label="Open navigation menu" className="fixed right-4 top-[5.25rem] z-30 grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-ink shadow-card md:hidden print:hidden" onClick={() => setMoreOpen(true)} type="button"><Menu className="h-5 w-5" /></button>
     <nav aria-label="Primary mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/50 bg-white/[0.92] px-2 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur-xl md:hidden print:hidden">
       <div className="mx-auto grid max-w-lg grid-cols-5 gap-0.5">{mobileItems.map((item) => { const Icon = icons[item.id]; const selected = active(pathname, item.href); return <Link key={item.href} href={item.href} aria-current={selected ? "page" : undefined} className={cn("flex min-h-[3.75rem] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold text-slate-500", selected && "bg-cedar/[0.08] text-cedar")}><Icon className="h-5 w-5" /><span>{item.label}</span></Link>; })}<button aria-expanded={moreOpen} className={cn("flex min-h-[3.75rem] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold text-slate-500", moreOpen && "bg-cedar/[0.08] text-cedar")} onClick={() => setMoreOpen((open) => !open)} type="button">{moreOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}<span>More</span></button></div>
-      {moreOpen ? <div className="absolute bottom-[calc(100%+0.5rem)] right-3 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">{moreItems.map((item) => { const Icon = icons[item.id]; return <Link key={item.id} href={item.href} onClick={() => setMoreOpen(false)} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Icon className="h-4 w-4 text-slate-500" />{item.label}</Link>; })}</div> : null}
+      
     </nav>
+    {moreOpen ? <div className="fixed inset-0 z-50 md:hidden print:hidden" role="dialog" aria-modal="true" aria-label="Workspace navigation"><button aria-label="Close navigation menu" className="absolute inset-0 h-full w-full bg-ink/35" onClick={() => setMoreOpen(false)} type="button" /><aside id="mobile-navigation-drawer" className="q-mobile-navigation-drawer absolute inset-y-0 right-0 flex w-[min(22rem,calc(100vw-2rem))] flex-col border-l border-slate-200 bg-white p-5 shadow-modal"><div className="mb-5 flex items-center justify-between"><p className="text-lg font-semibold text-ink">Navigation</p><button ref={drawerCloseRef} aria-label="Close navigation menu" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" onClick={() => setMoreOpen(false)} type="button"><X className="h-5 w-5" /></button></div><nav className="grid gap-1" aria-label="More workspace navigation">{moreItems.map((item) => { const Icon = icons[item.id]; const selected = active(pathname, item.href); return <Link key={item.id} href={item.href} onClick={() => setMoreOpen(false)} aria-current={selected ? "page" : undefined} className={linkClass(selected)}><Icon className="h-5 w-5" />{item.label}</Link>; })}</nav><div className="mt-auto border-t border-slate-100 pt-4"><SignOutButton /></div></aside></div> : null}
   </main>;
 }
