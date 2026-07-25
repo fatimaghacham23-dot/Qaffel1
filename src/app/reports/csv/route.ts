@@ -12,8 +12,9 @@ import {
   type FinanceInvoiceRow
 } from "@/lib/finance-closing";
 import type { OCInvoiceRow } from "@/lib/operations-center";
-import { hasPermission, type WorkspaceRole } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 import { toCsv } from "@/lib/csv";
+import { workspaceContextFromMembership } from "@/lib/workspace-authorization";
 
 const FINANCE_PRESET_ALIASES: Record<string, string> = {
   "monthly-pack": "finance_close_snapshot",
@@ -31,30 +32,21 @@ function one<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-async function getRouteWorkspaceContext(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, fallbackName?: string | null) {
-  const { data: membership } = await supabase
+async function getRouteWorkspaceContext(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: { id: string; user_metadata?: { full_name?: string | null } | null }
+) {
+  const { data: membership, error } = await supabase
     .from("workspace_members")
     .select("workspace_id, role, workspaces!inner(name)")
-    .eq("user_id", userId)
+    .eq("user_id", user.id)
     .eq("status", "active")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
-  if (!membership) {
-    return {
-      workspaceId: userId,
-      role: "owner" as WorkspaceRole,
-      workspaceName: fallbackName || "Workspace"
-    };
-  }
-
-  const workspace = one((membership as { workspaces?: { name?: string | null } | { name?: string | null }[] | null }).workspaces);
-  return {
-    workspaceId: String(membership.workspace_id),
-    role: membership.role as WorkspaceRole,
-    workspaceName: workspace?.name || "Workspace"
-  };
+  if (error) throw new Error("Workspace membership could not be verified.");
+  return workspaceContextFromMembership(user, membership);
 }
 
 function csvResponse(csv: string, filename: string) {
@@ -77,7 +69,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const ctx = await getRouteWorkspaceContext(supabase, user.id, user.user_metadata?.business_name || user.user_metadata?.full_name);
+    const ctx = await getRouteWorkspaceContext(supabase, user);
     const m = request.nextUrl.searchParams.get("m");
     const presetRaw = request.nextUrl.searchParams.get("preset");
     const preset = presetRaw ? FINANCE_PRESET_ALIASES[presetRaw] || presetRaw : null;

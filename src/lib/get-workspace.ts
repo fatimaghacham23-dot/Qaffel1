@@ -1,28 +1,22 @@
 import { cache } from "react";
 import { createClient, requireUser } from "@/lib/supabase/server";
-import type { WorkspaceRole } from "@/lib/permissions";
+import {
+  workspaceContextFromMembership,
+  type AuthorizedWorkspaceContext
+} from "@/lib/workspace-authorization";
 
-export type WorkspaceContext = {
-  workspaceId: string;
-  workspaceName: string;
-  userId: string;
-  userFullName: string;
-  role: WorkspaceRole;
-};
+export type WorkspaceContext = AuthorizedWorkspaceContext;
 
 /**
- * Resolve the current user's workspace context.
- * Uses React `cache()` to deduplicate within a single request.
+ * Resolve the current user's workspace context from an active persisted
+ * membership. The workspace migration backfills owner memberships, therefore
+ * absence is an authorization failure rather than an implicit owner fallback.
  *
- * For solo users, workspace_id === user_id (set during signup).
- * For team members, we return the first active workspace membership.
- *
- * Future: support switching between multiple workspaces.
+ * Future: support an explicit, validated workspace selection when users can
+ * belong to more than one workspace.
  */
 export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext> => {
   const { supabase, user } = await requireUser();
-
-  // Get the user's active workspace membership
   const { data: membership, error } = await supabase
     .from("workspace_members")
     .select(`
@@ -34,35 +28,18 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceContext> => 
     .eq("status", "active")
     .order("created_at", { ascending: true })
     .limit(1)
-    .single();
+    .maybeSingle();
 
-  if (error || !membership) {
-    // Fallback for users who haven't been migrated yet:
-    // Their workspace_id is their user_id (from the backfill)
-    return {
-      workspaceId: user.id,
-      workspaceName: user.user_metadata?.business_name ?? "My Workspace",
-      userId: user.id,
-      userFullName: user.user_metadata?.full_name ?? "Unknown",
-      role: "owner",
-    };
+  if (error) {
+    throw new Error("Workspace membership could not be verified.");
   }
 
-  const ws = membership.workspaces as unknown as { name: string };
-
-  return {
-    workspaceId: membership.workspace_id,
-    workspaceName: ws?.name ?? "Workspace",
-    userId: user.id,
-    userFullName: user.user_metadata?.full_name ?? "Unknown",
-    role: membership.role as WorkspaceRole,
-  };
+  return workspaceContextFromMembership(user, membership);
 });
 
 /**
- * Lightweight version that only checks if the user is authenticated.
- * Does NOT require workspace membership.
- * Use for public-adjacent pages or migration states.
+ * Lightweight authenticated context for public-adjacent or setup pages.
+ * Missing membership returns null and never grants an implicit role.
  */
 export const getOptionalWorkspaceContext = cache(async (): Promise<WorkspaceContext | null> => {
   const supabase = await createClient();

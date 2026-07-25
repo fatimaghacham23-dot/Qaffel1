@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, requireUser } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { requirePermission, type WorkspaceRole } from "@/lib/permissions";
+import { assertResourceInWorkspace } from "@/lib/workspace-authorization";
 import { getAcceptedProofTotals, reconcileInvoiceStatus, getRemainingBalance } from "@/lib/status";
 import { didSatisfyDeposit, getDepositRequest, roundCurrencyAmount } from "@/lib/deposit";
 import { normalizeDocumentType } from "@/lib/documents";
@@ -891,7 +892,7 @@ export async function reviewProofAction(formData: FormData) {
   if (
     invoiceCheckError ||
     !invoice ||
-    ((invoice as any).workspace_id && (invoice as any).workspace_id !== ctx.workspaceId && (invoice as any).user_id !== user.id)
+    invoice.workspace_id !== ctx.workspaceId
   ) {
     throw new Error("Invoice not found or you do not have permission to review this proof.");
   }
@@ -1097,7 +1098,9 @@ export async function reviewProofAction(formData: FormData) {
 }
 
 export async function runAiProofVerificationAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "proofs.review", "You do not have access to review payment proofs.");
   if (!isAiVerificationEnabled()) {
     throw new Error("AI verification is disabled. Set AI_VERIFICATION_ENABLED=true and GITHUB_MODELS_API_KEY.");
   }
@@ -1109,7 +1112,7 @@ export async function runAiProofVerificationAction(formData: FormData) {
     .from("invoices")
     .select("*")
     .eq("id", invoiceId)
-    .eq("user_id", user.id)
+    .eq("workspace_id", ctx.workspaceId)
     .single();
 
   if (invErr || !invoice) {
@@ -1229,7 +1232,9 @@ export async function runAiProofVerificationAction(formData: FormData) {
 }
 
 export async function saveReviewerDecisionNoteAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "proofs.review", "You do not have access to review payment proofs.");
   const proofId = text(formData, "proof_id");
   const invoiceId = text(formData, "invoice_id");
   const note = nullableText(formData, "reviewer_decision_note");
@@ -1238,7 +1243,7 @@ export async function saveReviewerDecisionNoteAction(formData: FormData) {
     .from("invoices")
     .select("id")
     .eq("id", invoiceId)
-    .eq("user_id", user.id)
+    .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
 
   if (!invoice) {
@@ -1258,6 +1263,8 @@ export async function saveReviewerDecisionNoteAction(formData: FormData) {
 
 export async function createManualPaymentAction(formData: FormData) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "payments.void", "You do not have access to record manual payments.");
   const invoiceId = text(formData, "invoice_id");
   const amountUsd = nullableNumber(formData, "amount_usd");
   const amountLbp = nullableNumber(formData, "amount_lbp");
@@ -1266,12 +1273,12 @@ export async function createManualPaymentAction(formData: FormData) {
   const note = nullableText(formData, "note");
   const allowDuplicate = text(formData, "allow_duplicate") === "1";
 
-  // Verify ownership and get invoice data
+  // Verify workspace access and get invoice data
   const { data: invoice, error: invoiceCheckError } = await supabase
     .from("invoices")
     .select("*")
     .eq("id", invoiceId)
-    .eq("user_id", user.id)
+    .eq("workspace_id", ctx.workspaceId)
     .single();
 
   if (invoiceCheckError || !invoice) {
@@ -1313,9 +1320,9 @@ export async function createManualPaymentAction(formData: FormData) {
 
   // 2. Create the accepted payment record
   const receiptToken = crypto.randomUUID().replaceAll("-", "");
-  const { error: proofError } = await supabase.from("payment_proofs").insert({
+  const { data: manualProof, error: proofError } = await supabase.from("payment_proofs").insert({
     invoice_id: invoiceId,
-    user_id: user.id,
+    user_id: invoice.user_id,
     amount_usd: amountUsd,
     amount_lbp: amountLbp,
     payment_date: normalizedPaymentDate,
@@ -1325,9 +1332,12 @@ export async function createManualPaymentAction(formData: FormData) {
     confirmed_at: new Date().toISOString(),
     image_url: null, // Manual payment has no image unless we add it later
     receipt_token: receiptToken
-  });
+  })
+    .select("id")
+    .single();
 
   await assertOk(proofError);
+  if (!manualProof) throw new Error("Manual payment could not be recorded.");
 
   const oldStatus = invoice.status;
 
@@ -1343,22 +1353,30 @@ export async function createManualPaymentAction(formData: FormData) {
     .from("invoices")
     .update({ status: finalStatus })
     .eq("id", invoiceId)
-    .eq("user_id", user.id);
+    .eq("workspace_id", ctx.workspaceId);
 
   await assertOk(invoiceUpdateError);
 
   await createInvoiceEvent({
     invoiceId,
-    userId: user.id,
+    userId: invoice.user_id,
+    workspaceId: ctx.workspaceId,
+    actorId: user.id,
+    actorName: ctx.userFullName,
+    actorRole: ctx.role,
     eventType: "manual_payment",
     message: `Manual payment recorded: ${amountUsd ? "$" + amountUsd : ""}${amountUsd && amountLbp ? " + " : ""}${amountLbp ? amountLbp + " LBP" : ""}`,
-    metadata: { amount_usd: amountUsd, amount_lbp: amountLbp, method, receipt_token: receiptToken }
+    metadata: { proof_id: manualProof.id, amount_usd: amountUsd, amount_lbp: amountLbp, method, receipt_token: receiptToken }
   });
 
   if (finalStatus !== oldStatus) {
     await createInvoiceEvent({
       invoiceId,
-      userId: user.id,
+      userId: invoice.user_id,
+      workspaceId: ctx.workspaceId,
+      actorId: user.id,
+      actorName: ctx.userFullName,
+      actorRole: ctx.role,
       eventType: `invoice_${finalStatus}`,
       message: `Invoice marked ${finalStatus}`
     });
@@ -1367,13 +1385,16 @@ export async function createManualPaymentAction(formData: FormData) {
   if (didSatisfyDeposit(invoice, beforePaymentProofs || [], allProofs || [])) {
     await createInvoiceEvent({
       invoiceId,
-      userId: user.id,
+      userId: invoice.user_id,
+      workspaceId: ctx.workspaceId,
+      actorId: user.id,
+      actorName: ctx.userFullName,
+      actorRole: ctx.role,
       eventType: "deposit_satisfied",
       message: "Deposit satisfied",
       metadata: { amount_usd: amountUsd, amount_lbp: amountLbp, method }
     });
   }
-
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath("/dashboard");
 }
@@ -1614,19 +1635,24 @@ export async function uploadProofAction(formData: FormData) {
 
 export async function voidPaymentAction(formData: FormData) {
   const { supabase, user } = await requireUser();
+  const ctx = await getWorkspaceContext();
+  requirePermission(ctx.role, "payments.void", "You do not have access to void payments.");
   const proofId = text(formData, "proof_id");
   const reason = nullableText(formData, "reason");
 
   // 1. Verify ownership and state
   const { data: proof, error: proofError } = await supabase
     .from("payment_proofs")
-    .select("*, invoices(user_id, status)")
+    .select("*, invoices(user_id, workspace_id, status)")
     .eq("id", proofId)
     .single();
 
-  if (proofError || !proof || (proof.invoices as any).user_id !== user.id) {
+  const proofInvoice = proof?.invoices as { user_id: string; workspace_id: string | null; status: string } | null;
+  if (proofError || !proof || !proofInvoice) {
     throw new Error("Payment record not found or access denied.");
   }
+  assertResourceInWorkspace(proofInvoice, ctx.workspaceId, "Payment record not found or access denied.");
+
 
   if (proof.status !== "accepted") {
     throw new Error("Only accepted payments can be voided.");
@@ -1662,19 +1688,26 @@ export async function voidPaymentAction(formData: FormData) {
     .from("invoices")
     .select("*")
     .eq("id", invoiceId)
+    .eq("workspace_id", ctx.workspaceId)
     .single();
 
+  if (!invoice) throw new Error("Invoice not found or access denied.");
   const finalStatus = reconcileInvoiceStatus(invoice, refreshedProofs || []);
 
   await supabase
     .from("invoices")
     .update({ status: finalStatus })
-    .eq("id", invoiceId);
+    .eq("id", invoiceId)
+    .eq("workspace_id", ctx.workspaceId);
 
   // 4. Activity event
   await createInvoiceEvent({
     invoiceId,
-    userId: user.id,
+    userId: proofInvoice.user_id,
+    workspaceId: ctx.workspaceId,
+    actorId: user.id,
+    actorName: ctx.userFullName,
+    actorRole: ctx.role,
     eventType: "payment_voided",
     message: `Payment voided: ${proof.amount_usd ? "$" + proof.amount_usd : ""}${proof.amount_usd && proof.amount_lbp ? " + " : ""}${proof.amount_lbp ? proof.amount_lbp + " LBP" : ""}${reason ? " (Reason: " + reason + ")" : ""}`,
     metadata: { 
