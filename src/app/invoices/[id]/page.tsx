@@ -16,6 +16,9 @@ import {
   duplicateInvoiceAction
 } from "@/app/actions";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { ResponsiveGrid } from "@/components/layout/ResponsiveGrid";
 import { InvoicePriorityBadges } from "@/components/InvoicePriorityBadges";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ProofReviewForm } from "@/components/ProofReviewForm";
@@ -411,11 +414,10 @@ export default async function InvoiceDetailPage({
 
   return (
     <AppShell>
+      <PageContainer width="wide">
+      <PageHeader backHref="/invoices" eyebrow={nounTitle} title={invoice.invoice_number ? `${invoice.invoice_number} - ${invoice.title}` : invoice.title} badge={<div className="flex flex-wrap items-center gap-2"><StatusBadge status={displayStatus} label={friendlyLifecycle} /><StatusBadge status={isQuote ? "quote" : "active"} label={nounTitle} /></div>} />
       <div className="mb-6">
-        <Link className="text-sm font-semibold text-cedar print:hidden" href="/invoices">
-          Back to invoices
-        </Link>
-        <section className="mt-3 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
           <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:p-6">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -425,9 +427,7 @@ export default async function InvoiceDetailPage({
                   <StatusBadge status={invoice.approval_status} label={`Approval: ${invoice.approval_status}`} />
                 ) : null}
               </div>
-              <h1 className="mt-4 break-words text-3xl font-bold tracking-normal text-ink lg:text-4xl">
-                {invoice.invoice_number ? `${invoice.invoice_number} - ${invoice.title}` : invoice.title}
-              </h1>
+              <p className="mt-4 break-words text-lg font-semibold text-ink">{invoice.title}</p>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <span className="font-semibold text-ink">{invoice.clients?.name || "No client selected"}</span>
                 <span>Created {shortDate(invoice.created_at)}</span>
@@ -519,7 +519,7 @@ export default async function InvoiceDetailPage({
         </div>
       )}
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <ResponsiveGrid className="mb-6" tabletColumns={2} desktopColumns={3}>
         <SummaryCard
           label={`${nounTitle} amount`}
           value={invoice.currency === "USD" ? money(invoice.amount_usd, "USD") : money(invoice.amount_lbp, "LBP")}
@@ -546,7 +546,7 @@ export default async function InvoiceDetailPage({
             />
           </>
         )}
-      </div>
+      </ResponsiveGrid>
 
       {!isQuote && depositStatus && (
         <section className="panel mb-6 border-sky-100 bg-sky-50/70">
@@ -936,6 +936,7 @@ export default async function InvoiceDetailPage({
           </form>
         </div>
       </section>
+      </PageContainer>
     </AppShell>
   );
 }

@@ -179,7 +179,7 @@ export function NewInvoiceCreatorForm({ clients, prefilledClientId, presets }: N
   return (
     <form
       action={createInvoiceAction}
-      className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]"
+      className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]"
       onInput={handleFieldInput}
       onInvalid={handleInvalid}
       onSubmit={handleSubmit}

@@ -74,9 +74,9 @@ export default async function PrintInvoicePage({
   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && (isQuote ? displayStatus === "expired" : invoice.status !== "paid");
 
   return (
-    <BrandedPublicSurface theme={docTheme} brandColor={brandColor} brandAccent={brandAccent} className="print-doc-root public-brand-surface min-h-screen bg-white p-4 md:p-8">
+    <BrandedPublicSurface theme={docTheme} brandColor={brandColor} brandAccent={brandAccent} className="print-doc-root public-brand-surface min-h-screen min-w-0 bg-white p-4 sm:p-6 md:p-8">
       {/* Print Controls - Hidden during print */}
-      <div className="mb-8 flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
+      <div className="mb-8 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <Link href={`/invoices/${id}`} className="text-sm font-semibold hover:underline" style={{ color: "var(--brand-primary, #116466)" }}>
           &larr; Back to {nounTitle.toLowerCase()}
         </Link>
@@ -193,7 +193,7 @@ export default async function PrintInvoicePage({
         )}
 
         {/* Document Item Table */}
-        <div className="mb-10 overflow-hidden rounded-lg border border-slate-200">
+        <div className="mb-10 overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
