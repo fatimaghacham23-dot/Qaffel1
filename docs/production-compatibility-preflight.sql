@@ -103,11 +103,11 @@ WITH target_tables(schema_name, table_name) AS (
   UNION ALL SELECT 'BACKFILL', 'payment_methods.workspace_id null count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Workspace RLS requires backfill; absent optional column is counted as null' FROM public.payment_methods pm WHERE to_jsonb(pm)->>'workspace_id' IS NULL
   UNION ALL SELECT 'BACKFILL', 'payment_proofs missing invoice count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Proof parent integrity' FROM public.payment_proofs pp LEFT JOIN public.invoices i ON i.id=pp.invoice_id WHERE i.id IS NULL
   UNION ALL SELECT 'BACKFILL', 'payment_proofs parent null workspace count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Proof parent workspace integrity; absent invoice workspace is counted as null' FROM public.payment_proofs pp JOIN public.invoices i ON i.id=pp.invoice_id WHERE to_jsonb(i)->>'workspace_id' IS NULL
-  UNION ALL SELECT 'BACKFILL', 'workspace_members inactive or unexpected status count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'REVIEW' END, 'MEDIUM', 'Non-active or unexpected membership status; absent status is reviewed' FROM public.workspace_members wm WHERE to_jsonb(wm)->>'status' IS NULL OR to_jsonb(wm)->>'status' NOT IN ('active','pending','removed') OR to_jsonb(wm)->>'status' <> 'active'
-  UNION ALL SELECT 'BACKFILL', 'workspaces without active owner membership count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Owner membership required; absent optional membership fields cannot satisfy ownership' FROM public.workspaces w WHERE NOT EXISTS (SELECT 1 FROM public.workspace_members wm WHERE to_jsonb(wm)->>'workspace_id'=to_jsonb(w)->>'id' AND to_jsonb(wm)->>'status'='active' AND to_jsonb(wm)->>'role'='owner')
+  UNION ALL SELECT 'BACKFILL', 'workspace_members inactive or unexpected status count', 'aggregate count', CASE WHEN to_regclass('public.workspace_members') IS NULL THEN 'parent table absent' ELSE 'table present; aggregate data check deferred to post-schema preflight' END, CASE WHEN to_regclass('public.workspace_members') IS NULL THEN 'BLOCKED' ELSE 'REVIEW' END, 'MEDIUM', 'Catalogue-only safety: membership data is not queried until the relation is confirmed'
+  UNION ALL SELECT 'BACKFILL', 'workspaces without active owner membership count', 'aggregate count', CASE WHEN to_regclass('public.workspaces') IS NULL OR to_regclass('public.workspace_members') IS NULL THEN 'parent table absent' ELSE 'tables present; aggregate data check deferred to post-schema preflight' END, CASE WHEN to_regclass('public.workspaces') IS NULL OR to_regclass('public.workspace_members') IS NULL THEN 'BLOCKED' ELSE 'REVIEW' END, 'HIGH', 'Catalogue-only safety: owner-membership data is not queried until both relations are confirmed'
   UNION ALL SELECT 'BACKFILL', 'invoice/client workspace mismatch count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Parent workspace mismatch; absent workspace values are compared safely' FROM public.invoices i JOIN public.clients c ON to_jsonb(c)->>'id'=to_jsonb(i)->>'client_id' WHERE (to_jsonb(i)->>'workspace_id') IS DISTINCT FROM (to_jsonb(c)->>'workspace_id')
   UNION ALL SELECT 'BACKFILL', 'payment_proofs direct workspace/owner comparison', 'NOT_APPLICABLE unless payment_proofs has a direct workspace_id or user_id', CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns c WHERE c.table_schema='public' AND c.table_name='payment_proofs' AND c.column_name IN ('workspace_id','user_id')) THEN 'DIRECT OWNERSHIP COLUMN PRESENT; review separately' ELSE 'NO DIRECT OWNERSHIP COLUMN; ownership is derived through invoice_id' END, CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns c WHERE c.table_schema='public' AND c.table_name='payment_proofs' AND c.column_name IN ('workspace_id','user_id')) THEN 'REVIEW' ELSE 'NOT_APPLICABLE' END, 'MEDIUM', 'Repository schema links proofs to invoices through payment_proofs.invoice_id; no timestamp or heuristic comparison is used'
-  UNION ALL SELECT 'BACKFILL', 'invoice_event/invoice workspace mismatch count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Parent workspace mismatch; optional event and invoice workspace fields are read safely' FROM public.invoice_events e JOIN public.invoices i ON to_jsonb(e)->>'invoice_id'=to_jsonb(i)->>'id' WHERE (to_jsonb(e)->>'workspace_id') IS DISTINCT FROM (to_jsonb(i)->>'workspace_id')
+  UNION ALL SELECT 'BACKFILL', 'invoice_event/invoice workspace mismatch count', 'aggregate count', CASE WHEN to_regclass('public.invoice_events') IS NULL THEN 'parent table absent' ELSE 'table present; aggregate data check deferred to post-schema preflight' END, CASE WHEN to_regclass('public.invoice_events') IS NULL THEN 'BLOCKED' ELSE 'REVIEW' END, 'HIGH', 'Catalogue-only safety: invoice-event data is not queried until the relation is confirmed'
 
   UNION ALL
   SELECT 'POLICY', p.schemaname::text || '.' || p.tablename::text || '.' || p.policyname::text, 'current definition snapshot',
@@ -137,17 +137,39 @@ WITH target_tables(schema_name, table_name) AS (
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN function_snapshot_names f ON f.function_name=p.proname WHERE n.nspname='public'
 
   UNION ALL
-  SELECT 'STRIPE_PREFLIGHT', 'duplicate stripe event ID groups', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Unique index precondition'
-  FROM (SELECT 1 FROM public.workspace_billing_audit_events a WHERE to_jsonb(a)->'next_state'->>'stripe_event_id' IS NOT NULL GROUP BY to_jsonb(a)->>'event_type', to_jsonb(a)->'next_state'->>'stripe_event_id' HAVING count(*)>1) d
-  UNION ALL SELECT 'STRIPE_PREFLIGHT', 'maximum duplicates in one group', '1', COALESCE(max(duplicate_count),0)::text, CASE WHEN COALESCE(max(duplicate_count),0)<=1 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Unique index precondition' FROM (SELECT count(*) AS duplicate_count FROM public.workspace_billing_audit_events a WHERE to_jsonb(a)->'next_state'->>'stripe_event_id' IS NOT NULL GROUP BY to_jsonb(a)->>'event_type', to_jsonb(a)->'next_state'->>'stripe_event_id') d
-  UNION ALL SELECT 'STRIPE_PREFLIGHT', 'rows with missing stripe event ID', 'aggregate count', count(*)::text, 'REVIEW', 'MEDIUM', 'Historical audit data completeness; absent next_state is counted as missing' FROM public.workspace_billing_audit_events a WHERE to_jsonb(a)->'next_state'->>'stripe_event_id' IS NULL
-  UNION ALL SELECT 'STRIPE_PREFLIGHT', 'workspace_billing_audit_stripe_event_uidx', 'index absent before compatibility rollout', CASE WHEN EXISTS(SELECT 1 FROM actual_indexes WHERE index_name='workspace_billing_audit_stripe_event_uidx') THEN 'present' ELSE 'absent' END, CASE WHEN EXISTS(SELECT 1 FROM actual_indexes WHERE index_name='workspace_billing_audit_stripe_event_uidx') THEN 'REVIEW' ELSE 'READY' END, 'MEDIUM', 'Exact-name precondition'
+  SELECT 'STRIPE_PREFLIGHT', 'public.workspace_billing_audit_events', 'table exists for webhook audit/replay protection',
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'table absent' ELSE 'table present' END,
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'MISSING' ELSE 'READY' END,
+    'HIGH', 'Parent relation required before webhook data or index checks'
 
   UNION ALL
+  SELECT 'STRIPE_PREFLIGHT', 'duplicate stripe event ID groups', '0',
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'parent table absent' ELSE 'table present; aggregate data check deferred to post-schema preflight' END,
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'BLOCKED' ELSE 'REVIEW' END,
+    'HIGH', 'Data precondition cannot be evaluated until the parent table is confirmed'
+
+  UNION ALL
+  SELECT 'STRIPE_PREFLIGHT', 'maximum duplicates in one group', '1',
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'parent table absent' ELSE 'table present; aggregate data check deferred to post-schema preflight' END,
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'BLOCKED' ELSE 'REVIEW' END,
+    'HIGH', 'Data precondition cannot be evaluated until the parent table is confirmed'
+
+  UNION ALL
+  SELECT 'STRIPE_PREFLIGHT', 'rows with missing stripe event ID', 'aggregate count',
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'parent table absent' ELSE 'table present; aggregate data check deferred to post-schema preflight' END,
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'BLOCKED' ELSE 'REVIEW' END,
+    'MEDIUM', 'Data precondition cannot be evaluated until the parent table is confirmed'
+
+  UNION ALL
+  SELECT 'STRIPE_PREFLIGHT', 'workspace_billing_audit_stripe_event_uidx', 'index absent before compatibility rollout',
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'parent table absent' WHEN EXISTS(SELECT 1 FROM actual_indexes WHERE index_name='workspace_billing_audit_stripe_event_uidx') THEN 'present' ELSE 'absent' END,
+    CASE WHEN to_regclass('public.workspace_billing_audit_events') IS NULL THEN 'BLOCKED' WHEN EXISTS(SELECT 1 FROM actual_indexes WHERE index_name='workspace_billing_audit_stripe_event_uidx') THEN 'REVIEW' ELSE 'READY' END,
+    'MEDIUM', 'Index data check is blocked until the parent table exists'
+  UNION ALL
   SELECT 'INDEX', 'public.' || e.index_name, 'columns: ' || e.signature_hint,
-    COALESCE(a.index_definition || '; unique=' || a.indisunique::text || '; predicate=' || COALESCE(a.predicate,'none') || '; valid=' || a.indisvalid::text || '; ready=' || a.indisready::text,'absent'),
-    CASE WHEN a.index_name IS NOT NULL THEN 'REVIEW' WHEN EXISTS(SELECT 1 FROM actual_indexes x WHERE x.table_name=e.table_name AND x.index_definition ILIKE '%' || split_part(e.signature_hint, ',', 1) || '%') THEN 'REVIEW' ELSE 'MISSING' END,
-    'MEDIUM', 'Exact name or possible equivalent index'
+    CASE WHEN to_regclass('public.' || e.table_name) IS NULL THEN 'parent table absent' ELSE COALESCE(a.index_definition || '; unique=' || a.indisunique::text || '; predicate=' || COALESCE(a.predicate,'none') || '; valid=' || a.indisvalid::text || '; ready=' || a.indisready::text,'absent') END,
+    CASE WHEN to_regclass('public.' || e.table_name) IS NULL THEN 'BLOCKED' WHEN a.index_name IS NOT NULL THEN 'REVIEW' WHEN EXISTS(SELECT 1 FROM actual_indexes x WHERE x.table_name=e.table_name AND x.index_definition ILIKE '%' || split_part(e.signature_hint, ',', 1) || '%') THEN 'REVIEW' ELSE 'MISSING' END,
+    'MEDIUM', 'Exact name or possible equivalent index; blocked when parent table is absent'
   FROM expected_indexes e LEFT JOIN actual_indexes a ON a.index_name=e.index_name
 
   UNION ALL
