@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "node scripts/smoke-routes.mjs"
+    "smoke": "node scripts/smoke-routes.mjs",
+    "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
