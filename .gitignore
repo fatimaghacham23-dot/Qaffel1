@@ -13,3 +13,5 @@ tsconfig.tsbuildinfo
 output/
 playwright-report/
 test-results/
+
+/tmp/
