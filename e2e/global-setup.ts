@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { E2E_PASSWORD, E2E_USERS } from "./fixtures";
+import { hostedE2ESafetyError, isHostedE2E } from "@/lib/e2e-production-safe";
 
 export default async function globalSetup() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();

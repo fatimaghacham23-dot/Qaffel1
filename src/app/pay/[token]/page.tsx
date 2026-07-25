@@ -6,6 +6,7 @@ import { PayConversionHelpers } from "@/components/public/PayConversionHelpers";
 import { PayStatusExperience } from "@/components/public/PayStatusExperience";
 import { PayTrustHeader } from "@/components/public/PayTrustHeader";
 import { PublicContentContainer, PublicPageShell } from "@/components/public/PublicPageShell";
+import { PublicLocaleScope } from "@/components/public/PublicLocaleScope";
 import { PublicPayHelpFooter } from "@/components/public/PublicPayHelpFooter";
 import { PublicPayMethodCards } from "@/components/public/PublicPayMethodCards";
 import { PublicPaymentPlanBanner } from "@/components/public/PublicPaymentPlanBanner";
@@ -25,6 +26,7 @@ import { parsePublicPaymentPageData } from "@/lib/public-payment-page";
 import { parsePaymentPlan } from "@/lib/payment-plan";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
 import { notFound } from "next/navigation";
+import { resolvePublicLang } from "@/lib/public-locale";
 
 function PublicFlag({ tone, label }: { tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }) {
   const tones = {
@@ -43,11 +45,12 @@ export default async function PublicInvoicePage({
   searchParams
 }: {
   params: Promise<{ token: string }>;
-  searchParams?: Promise<{ uploaded?: string; method?: string }>;
+  searchParams?: Promise<{ uploaded?: string; method?: string; lang?: string }>;
 }) {
   const { token } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const proofUploaded = resolvedSearchParams.uploaded === "1";
+  const lang = resolvePublicLang(resolvedSearchParams.lang);
   const preferredMethodType = (resolvedSearchParams.method || "").toLowerCase();
   const supabase = await createClient();
   const { data: paymentPageRaw, error: paymentPageError } = await supabase.rpc("get_public_payment_page", {
@@ -283,6 +286,7 @@ export default async function PublicInvoicePage({
   })();
 
   return (
+    <PublicLocaleScope lang={lang} pathname={`/pay/${token}`}>
     <PublicPageShell>
       <BrandedPublicSurface theme={docTheme} brandColor={brandColor} brandAccent={brandAccent}>
         <PublicContentContainer>
@@ -654,5 +658,6 @@ export default async function PublicInvoicePage({
       </PublicContentContainer>
       </BrandedPublicSurface>
     </PublicPageShell>
+  </PublicLocaleScope>
   );
 }

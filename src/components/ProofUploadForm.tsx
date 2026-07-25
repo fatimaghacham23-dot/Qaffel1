@@ -6,6 +6,7 @@ import type { PublicPaymentMethodOption } from "@/lib/public-pay-method";
 import { toast } from "sonner";
 import { CheckCircle2, FileText, UploadCloud, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PublicLang } from "@/lib/i18n-public";
 
 interface ProofUploadFormProps {
   token: string;
@@ -13,12 +14,33 @@ interface ProofUploadFormProps {
   defaultAmountUsd?: number | null;
   defaultAmountLbp?: number | null;
   defaultMethodLabel?: string | null;
+  lang?: PublicLang;
 }
 
 const ACCEPT = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const ACCEPT_LABEL = "JPG, PNG, WebP, or PDF - max 5 MB";
 
-export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmountLbp, defaultMethodLabel }: ProofUploadFormProps) {
+const uploadCopy = {
+  en: {
+    missing: "Please upload a screenshot or receipt.", invalid: "Please upload a JPG, PNG, WebP, or PDF file.", tooLarge: "File is too large. Maximum size is 5MB.",
+    amountUsd: "Payment amount USD must be greater than 0.", amountLbp: "Payment amount LBP must be greater than 0.", failed: "Failed to upload proof.",
+    amountUsdLabel: "Amount paid USD", amountLbpLabel: "Amount paid LBP", paymentDate: "Payment date", method: "Method used", selectMethod: "Select method",
+    proof: "Screenshot or PDF", note: "Note (optional)", upload: "Submit payment proof", choose: "Choose proof to continue", uploading: "Uploading...",
+    ready: "Proof ready to submit", tap: "Tap to choose a receipt or screenshot", selected: "Selected:", remove: "Remove selected proof",
+    what: "What happens after upload?", review: "Uploads are reviewed manually and are never auto-approved."
+  },
+  ar: {
+    missing: "\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0623\u0648 \u0625\u064a\u0635\u0627\u0644.", invalid: "\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0645\u0644\u0641 JPG \u0623\u0648 PNG \u0623\u0648 WebP \u0623\u0648 PDF.", tooLarge: "\u0627\u0644\u0645\u0644\u0641 \u0643\u0628\u064a\u0631 \u062c\u062f\u0627\u064b. \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 5 \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a.",
+    amountUsd: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u0645\u0628\u0644\u063a \u0627\u0644\u062f\u0641\u0639 \u0628\u0627\u0644\u062f\u0648\u0644\u0627\u0631 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0635\u0641\u0631.", amountLbp: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u0645\u0628\u0644\u063a \u0627\u0644\u062f\u0641\u0639 \u0628\u0627\u0644\u0644\u064a\u0631\u0629 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0635\u0641\u0631.", failed: "\u062a\u0639\u0630\u0631 \u0631\u0641\u0639 \u0625\u062b\u0628\u0627\u062a \u0627\u0644\u062f\u0641\u0639.",
+    amountUsdLabel: "\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0645\u062f\u0641\u0648\u0639 \u0628\u0627\u0644\u062f\u0648\u0644\u0627\u0631", amountLbpLabel: "\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0645\u062f\u0641\u0648\u0639 \u0628\u0627\u0644\u0644\u064a\u0631\u0629", paymentDate: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u062f\u0641\u0639", method: "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639", selectMethod: "\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639",
+    proof: "\u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0623\u0648 \u0645\u0644\u0641 PDF", note: "\u0645\u0644\u0627\u062d\u0638\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)", upload: "\u0625\u0631\u0633\u0627\u0644 \u0625\u062b\u0628\u0627\u062a \u0627\u0644\u062f\u0641\u0639", choose: "\u0627\u062e\u062a\u0631 \u0625\u062b\u0628\u0627\u062a\u0627\u064b \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629", uploading: "\u062c\u0627\u0631\u064d \u0627\u0644\u0631\u0641\u0639...",
+    ready: "\u0625\u062b\u0628\u0627\u062a \u0627\u0644\u062f\u0641\u0639 \u062c\u0627\u0647\u0632 \u0644\u0644\u0625\u0631\u0633\u0627\u0644", tap: "\u0627\u0636\u063a\u0637 \u0644\u0627\u062e\u062a\u064a\u0627\u0631 \u0625\u064a\u0635\u0627\u0644 \u0623\u0648 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629", selected: "\u062a\u0645 \u0627\u0644\u0627\u062e\u062a\u064a\u0627\u0631:", remove: "\u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0625\u062b\u0628\u0627\u062a \u0627\u0644\u0645\u062d\u062f\u062f",
+    what: "\u0645\u0627\u0630\u0627 \u064a\u062d\u062f\u062b \u0628\u0639\u062f \u0627\u0644\u0631\u0641\u0639\u061f", review: "\u062a\u062a\u0645 \u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u0625\u062b\u0628\u0627\u062a\u0627\u062a \u064a\u062f\u0648\u064a\u0627\u064b \u0648\u0644\u0627 \u062a\u062a\u0645 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629 \u0639\u0644\u064a\u0647\u0627 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b."
+  }
+} as const;
+
+export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmountLbp, defaultMethodLabel, lang = "en" }: ProofUploadFormProps) {
+  const copy = uploadCopy[lang];
   const [isUploading, setIsUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -62,18 +84,18 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
     const f = formFile instanceof File && formFile.size > 0 ? formFile : file;
 
     if (!f || f.size === 0) {
-      toast.error("Please upload a screenshot or receipt.");
+      toast.error(copy.missing);
       return;
     }
 
     if (!ACCEPT.includes(f.type)) {
-      toast.error("Please upload a JPG, PNG, WebP, or PDF file.");
+      toast.error(copy.invalid);
       return;
     }
 
     const maxSize = 5 * 1024 * 1024;
     if (f.size > maxSize) {
-      toast.error("File is too large. Maximum size is 5MB.");
+      toast.error(copy.tooLarge);
       return;
     }
 
@@ -81,12 +103,12 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
     const amountLbp = formData.get("amount_lbp") as string;
 
     if (amountUsd && parseFloat(amountUsd) <= 0) {
-      toast.error("Payment amount USD must be greater than 0.");
+      toast.error(copy.amountUsd);
       return;
     }
 
     if (amountLbp && parseInt(amountLbp, 10) <= 0) {
-      toast.error("Payment amount LBP must be greater than 0.");
+      toast.error(copy.amountLbp);
       return;
     }
 
@@ -97,7 +119,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
     try {
       await uploadProofAction(formData);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to upload proof.";
+      const message = error instanceof Error ? error.message : copy.failed;
       if (typeof message === "string" && message.toLowerCase().includes("duplicate")) {
         toast.warning(message);
       } else {
@@ -143,7 +165,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
   return (
     <>
       <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700 shadow-sm">
-        <p className="font-semibold text-ink">What happens after upload?</p>
+        <p className="font-semibold text-ink">{copy.what}</p>
         <ol className="mt-2 grid gap-2">
           <li className="flex gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cedar" aria-hidden />
@@ -151,7 +173,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           </li>
           <li className="flex gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cedar" aria-hidden />
-            <span>Uploads are reviewed manually and are never auto-approved.</span>
+            <span>{copy.review}</span>
           </li>
           <li className="flex gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cedar" aria-hidden />
@@ -165,7 +187,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="amount_usd">
-              Amount paid USD
+              {copy.amountUsdLabel}
             </label>
             <input
               className="field"
@@ -182,7 +204,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           </div>
           <div>
             <label className="label" htmlFor="amount_lbp">
-              Amount paid LBP
+              {copy.amountLbpLabel}
             </label>
             <input
               className="field"
@@ -202,7 +224,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="payment_date">
-              Payment date
+              {copy.paymentDate}
             </label>
             <input
               className="field"
@@ -216,10 +238,10 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           </div>
           <div>
             <label className="label" htmlFor="method">
-              Method used
+              {copy.method}
             </label>
             <select className="field" id="method" name="method" defaultValue={defaultMethodLabel || (methods?.length === 1 ? methods[0].label : "")} disabled={isUploading}>
-              {methods?.length !== 1 && <option value="">Select method</option>}
+              {methods?.length !== 1 && <option value="">{copy.selectMethod}</option>}
               {(methods || []).map((method, index) => (
                 <option key={`${method.label}-${index}`} value={method.label}>
                   {method.label}
@@ -232,7 +254,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
             <label className="label mb-0" htmlFor="proof">
-              Screenshot or PDF
+              {copy.proof}
             </label>
             <span className="text-[10px] font-semibold text-slate-500">{ACCEPT_LABEL}</span>
           </div>
@@ -271,7 +293,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
             ) : (
               <UploadCloud className="h-8 w-8 text-cedar" aria-hidden />
             )}
-            <span className="text-sm font-semibold text-ink">{file ? "Proof ready to submit" : "Tap to choose a receipt or screenshot"}</span>
+            <span className="text-sm font-semibold text-ink">{file ? copy.ready : copy.tap}</span>
             <span className="max-w-xs text-xs leading-relaxed text-slate-500">
               {file ? "Review the amount and method above, then submit." : "A clear receipt, transfer confirmation, or payment screenshot works best."}
             </span>
@@ -280,9 +302,9 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
           {file ? (
             <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
               <p className="min-w-0 font-medium">
-                Selected: <span className="break-all">{file.name}</span> ({(file.size / 1024).toFixed(0)} KB)
+                {copy.selected} <span className="break-all">{file.name}</span> ({(file.size / 1024).toFixed(0)} KB)
               </p>
-              <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-slate-200 text-slate-500" onClick={clearPreview} disabled={isUploading} aria-label="Remove selected proof">
+              <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-slate-200 text-slate-500" onClick={clearPreview} disabled={isUploading} aria-label={copy.remove}>
                 <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
@@ -298,7 +320,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
 
         <div>
           <label className="label" htmlFor="note">
-            Note (optional)
+            {copy.note}
           </label>
           <textarea className="field min-h-24" id="note" name="note" disabled={isUploading} placeholder="Reference, sender name, or other context..." />
         </div>
@@ -311,7 +333,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
 
         <div className="hidden sm:block">
           <button className="btn btn-primary w-full touch-manipulation py-3 text-sm font-bold sm:py-2.5" type="submit" disabled={!canSubmit}>
-            {isUploading ? "Uploading..." : file ? "Submit payment proof" : "Choose proof to continue"}
+            {isUploading ? copy.uploading : file ? copy.upload : copy.choose}
           </button>
         </div>
       </form>
@@ -324,7 +346,7 @@ export function ProofUploadForm({ token, methods, defaultAmountUsd, defaultAmoun
             disabled={!canSubmit}
             onClick={() => formRef.current?.requestSubmit()}
           >
-            {isUploading ? "Uploading..." : file ? "Submit payment proof" : "Choose proof to continue"}
+            {isUploading ? copy.uploading : file ? copy.upload : copy.choose}
           </button>
         </div>
       </div>

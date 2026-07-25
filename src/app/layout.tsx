@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { CommandCenter } from "@/components/CommandCenter";
 import { createClient } from "@/lib/supabase/server";
@@ -16,13 +17,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+  const publicLang = requestHeaders.get("x-qaffel-public-lang") === "ar" ? "ar" : "en";
   const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
   return (
-    <html lang="en">
+    <html lang={publicLang} dir={publicLang === "ar" ? "rtl" : "ltr"}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
