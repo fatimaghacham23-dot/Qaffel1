@@ -1,3 +1,4 @@
+import "server-only";
 export type PublicLocale = "en" | "ar";
 
 function configuredBaseUrl() {

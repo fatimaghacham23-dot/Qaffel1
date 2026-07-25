@@ -23,6 +23,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { ManualPaymentForm } from "@/components/ManualPaymentForm";
 import { VoidPaymentButton } from "@/components/VoidPaymentButton";
 import { FollowUpSection } from "@/components/FollowUpSection";
+import { buildPaymentUrl } from "@/lib/urls";
 import { ExtendInvoiceValidityForm } from "@/components/ExtendInvoiceValidityForm";
 import { InvoiceDepositFields } from "@/components/InvoiceDepositFields";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
@@ -280,7 +281,7 @@ export default async function InvoiceDetailPage({
   const hasPaymentMethods = (methods || []).length > 0;
   const acceptedProofs = proofsWithSignedUrls.filter((proof) => proof.status === "accepted");
   const voidedProofs = proofsWithSignedUrls.filter((proof) => proof.status === "voided");
-  const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pay/${invoice.public_token}`;
+  const publicUrl = buildPaymentUrl(invoice.public_token);
   const clientEmail = invoice.clients?.email;
   const clientPhone = invoice.clients?.phone;
   const pendingProofCount = proofsWithSignedUrls.filter((proof) => proof.status === "pending").length;
@@ -655,6 +656,7 @@ export default async function InvoiceDetailPage({
               lastReminder={lastReminder}
               events={(events || []) as any}
               proofs={proofsWithSignedUrls as any}
+              paymentUrl={publicUrl}
             />
           )}
 

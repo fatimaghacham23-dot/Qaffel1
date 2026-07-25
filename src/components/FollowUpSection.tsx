@@ -29,6 +29,7 @@ interface FollowUpSectionProps {
   } | null;
   events?: any[];
   proofs?: any[];
+  paymentUrl: string;
 }
 
 function reminderAssistTone(item: ReminderAssistItem) {
@@ -44,7 +45,8 @@ export function FollowUpSection({
   remainingBalance,
   lastReminder,
   events = [],
-  proofs = []
+  proofs = [],
+  paymentUrl
 }: FollowUpSectionProps) {
   const [isRecording, setIsRecording] = useState(false);
 
