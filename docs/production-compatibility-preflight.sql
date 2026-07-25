@@ -71,10 +71,10 @@ WITH target_tables(schema_name, table_name) AS (
   SELECT c.table_schema, c.table_name, c.column_name, c.data_type, c.is_nullable, COALESCE(c.column_default,'none') AS column_default
   FROM information_schema.columns c JOIN target_tables t ON t.schema_name = c.table_schema AND t.table_name = c.table_name
 ), actual_indexes AS (
-  SELECT n.nspname AS schema_name, t.relname AS table_name, i.relname AS index_name, ix.indisunique, ix.indisvalid, ix.indisready,
+  SELECT n.nspname::text AS schema_name, t.relname::text AS table_name, i.relname::text AS index_name, ix.indisunique, ix.indisvalid, ix.indisready,
     pg_get_indexdef(i.oid) AS index_definition, pg_get_expr(ix.indpred, ix.indrelid) AS predicate
   FROM pg_index ix JOIN pg_class i ON i.oid = ix.indexrelid JOIN pg_class t ON t.oid = ix.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
-  WHERE n.nspname = 'public'
+  WHERE n.nspname::text = 'public'
 ), result_rows AS (
   SELECT 'TABLE_COLUMN' AS check_group, e.schema_name || '.' || e.table_name || '.' || e.column_name AS object_name,
     e.expected_type || '; nullable=' || e.expected_nullable AS expected_state,
@@ -86,11 +86,11 @@ WITH target_tables(schema_name, table_name) AS (
   UNION ALL
   SELECT 'TABLE', t.schema_name || '.' || t.table_name, 'table exists', CASE WHEN c.oid IS NULL THEN 'TABLE ABSENT' ELSE 'TABLE PRESENT' END,
     CASE WHEN c.oid IS NULL THEN 'MISSING' ELSE 'READY' END, 'HIGH', 'RLS and constraint target'
-  FROM target_tables t LEFT JOIN pg_namespace n ON n.nspname=t.schema_name LEFT JOIN pg_class c ON c.relnamespace=n.oid AND c.relname=t.table_name AND c.relkind='r'
+  FROM target_tables t LEFT JOIN pg_namespace n ON n.nspname=t.schema_name LEFT JOIN pg_class c ON c.relnamespace=n.oid AND c.relname=t.table_name AND c.relkind::text='r'
 
   UNION ALL
-  SELECT 'CONSTRAINT', conrelid::regclass::text || '.' || conname, contype || '; ' || pg_get_constraintdef(oid), contype || '; ' || pg_get_constraintdef(oid), 'REVIEW', 'MEDIUM', 'Primary, unique, and foreign-key snapshot'
-  FROM pg_constraint WHERE conrelid IN (SELECT to_regclass(schema_name || '.' || table_name) FROM target_tables) AND contype IN ('p','u','f')
+  SELECT 'CONSTRAINT', conrelid::regclass::text || '.' || conname::text, contype::text || '; ' || pg_get_constraintdef(oid), contype::text || '; ' || pg_get_constraintdef(oid), 'REVIEW', 'MEDIUM', 'Primary, unique, and foreign-key snapshot'
+  FROM pg_constraint WHERE conrelid IN (SELECT to_regclass(schema_name || '.' || table_name) FROM target_tables) AND contype::text IN ('p','u','f')
 
   UNION ALL
   SELECT 'RLS', t.schema_name || '.' || t.table_name, 'enabled', COALESCE(c.relrowsecurity::text,'TABLE ABSENT'),
@@ -110,8 +110,8 @@ WITH target_tables(schema_name, table_name) AS (
   UNION ALL SELECT 'BACKFILL', 'invoice_event/invoice workspace mismatch count', '0', count(*)::text, CASE WHEN count(*)=0 THEN 'READY' ELSE 'BLOCKED' END, 'HIGH', 'Parent workspace mismatch' FROM public.invoice_events e JOIN public.invoices i ON i.id=e.invoice_id WHERE e.workspace_id IS DISTINCT FROM i.workspace_id
 
   UNION ALL
-  SELECT 'POLICY', p.schemaname || '.' || p.tablename || '.' || p.policyname, 'current definition snapshot',
-    'roles=' || array_to_string(p.roles, ',') || '; command=' || p.cmd || '; permissive=' || p.permissive || '; using=' || COALESCE(p.qual,'none') || '; check=' || COALESCE(p.with_check,'none'),
+  SELECT 'POLICY', p.schemaname::text || '.' || p.tablename::text || '.' || p.policyname::text, 'current definition snapshot',
+    'roles=' || array_to_string(p.roles, ',') || '; command=' || p.cmd::text || '; permissive=' || p.permissive::text || '; using=' || COALESCE(p.qual,'none') || '; check=' || COALESCE(p.with_check,'none'),
     'REVIEW', 'HIGH', 'Current policy definition'
   FROM pg_policies p WHERE (p.schemaname='public' AND p.tablename IN ('clients','invoices','payment_methods','payment_proofs')) OR (p.schemaname='storage' AND p.tablename='objects')
 
@@ -125,14 +125,14 @@ WITH target_tables(schema_name, table_name) AS (
   WHERE n.nspname='public' OR p.oid IS NULL
 
   UNION ALL
-  SELECT 'FUNCTION', 'public.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')', 'function snapshot',
+  SELECT 'FUNCTION', 'public.' || p.proname::text || '(' || pg_get_function_identity_arguments(p.oid) || ')', 'function snapshot',
     'returns=' || pg_get_function_result(p.oid) || '; security_definer=' || p.prosecdef::text || '; search_path=' || COALESCE(array_to_string(p.proconfig, ', '),'none') || '; owner=' || pg_get_userbyid(p.proowner) || '; definition_md5=' || md5(pg_get_functiondef(p.oid)),
     'REVIEW', 'HIGH', 'Current function metadata; grants are separate rows'
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN function_snapshot_names f ON f.function_name=p.proname WHERE n.nspname='public'
 
   UNION ALL
-  SELECT 'FUNCTION_GRANT', 'public.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')', 'execution grants snapshot',
-    COALESCE((SELECT string_agg(rp.grantee || ':' || rp.privilege_type, ', ' ORDER BY rp.grantee) FROM information_schema.routine_privileges rp WHERE rp.routine_schema='public' AND rp.routine_name=p.proname),'no grants visible'),
+  SELECT 'FUNCTION_GRANT', 'public.' || p.proname::text || '(' || pg_get_function_identity_arguments(p.oid) || ')', 'execution grants snapshot',
+    COALESCE((SELECT string_agg(rp.grantee || ':' || rp.privilege_type, ', ' ORDER BY rp.grantee) FROM information_schema.routine_privileges rp WHERE rp.routine_schema='public' AND rp.routine_name=p.proname::text),'no grants visible'),
     'REVIEW', 'HIGH', 'Current execution grants'
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN function_snapshot_names f ON f.function_name=p.proname WHERE n.nspname='public'
 
@@ -163,12 +163,12 @@ WITH target_tables(schema_name, table_name) AS (
   FROM dependency_tables d
   UNION ALL SELECT 'RPC_DEPENDENCY_COLUMN', d.function_name || ' -> ' || d.schema_name || '.' || d.table_name || '.' || d.column_name, 'column exists', CASE WHEN c.column_name IS NULL THEN 'absent' ELSE c.data_type END, CASE WHEN c.column_name IS NULL THEN 'MISSING' ELSE 'READY' END, 'HIGH', 'Referenced column prerequisite' FROM dependency_columns d LEFT JOIN information_schema.columns c ON c.table_schema=d.schema_name AND c.table_name=d.table_name AND c.column_name=d.column_name
   UNION ALL SELECT 'RPC_DEPENDENCY_EXTENSION', 'pgcrypto', 'installed', CASE WHEN EXISTS(SELECT 1 FROM pg_extension WHERE extname='pgcrypto') THEN 'installed' ELSE 'absent' END, CASE WHEN EXISTS(SELECT 1 FROM pg_extension WHERE extname='pgcrypto') THEN 'READY' ELSE 'MISSING' END, 'HIGH', 'Required by receipt-token generation'
-  UNION ALL SELECT 'RPC_DEPENDENCY_STATUS', 'payment_proofs accepted/pending/rejected/voided', 'status constraint supports values', COALESCE((SELECT string_agg(pg_get_constraintdef(c.oid), ' | ') FROM pg_constraint c WHERE c.conrelid='public.payment_proofs'::regclass AND c.contype='c'),'no check constraint'), 'REVIEW', 'HIGH', 'Review current status constraint before atomic functions'
+  UNION ALL SELECT 'RPC_DEPENDENCY_STATUS', 'payment_proofs accepted/pending/rejected/voided', 'status constraint supports values', COALESCE((SELECT string_agg(pg_get_constraintdef(c.oid), ' | ') FROM pg_constraint c WHERE c.conrelid='public.payment_proofs'::regclass AND c.contype::text='c'),'no check constraint'), 'REVIEW', 'HIGH', 'Review current status constraint before atomic functions'
 
   UNION ALL
   SELECT 'LEGACY_COMPATIBILITY', l.object_type || ':' || COALESCE(l.schema_name || '.' || l.table_name || '.', l.schema_name || '.') || l.object_name, 'retain or provide compatible replacement',
-    CASE WHEN l.object_type='FUNCTION' AND EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=l.schema_name AND p.proname=l.object_name) THEN 'present'
-         WHEN l.object_type='POLICY' AND EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname=l.schema_name AND p.tablename=l.table_name AND p.policyname=l.object_name) THEN 'present'
+    CASE WHEN l.object_type='FUNCTION' AND EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname::text=l.schema_name AND p.proname::text=l.object_name) THEN 'present'
+         WHEN l.object_type='POLICY' AND EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname::text=l.schema_name AND p.tablename::text=l.table_name AND p.policyname::text=l.object_name) THEN 'present'
          ELSE 'absent' END,
     'REVIEW', 'HIGH', l.risk
   FROM legacy_objects l
