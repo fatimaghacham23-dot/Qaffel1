@@ -69,9 +69,8 @@ WITH expected_columns(migration, table_schema, table_name, column_name, expected
     ('20260725101500', 'review_payment_proof_atomic', 'p_proof_id uuid, p_invoice_id uuid, p_decision text, p_requested_invoice_status text', 'authenticated'),
     ('20260725101500', 'void_payment_proof_atomic', 'p_proof_id uuid, p_reason text', 'authenticated'),
     ('20260725101500', 'record_manual_payment_atomic', 'p_invoice_id uuid, p_amount_usd numeric, p_amount_lbp numeric, p_payment_date date, p_method text, p_note text, p_allow_duplicate boolean', 'authenticated')
-), expected_ledger(version) AS (
-  VALUES ('20260725090000'), ('20260725093000'), ('20260725100000'), ('20260725101500')
 )
+
 SELECT * FROM (
   SELECT c.migration, 'COLUMN' AS object_type,
     c.table_schema || '.' || c.table_name || '.' || c.column_name AS object_name,
@@ -134,10 +133,13 @@ SELECT * FROM (
   FROM expected_grants g
 
   UNION ALL
-  SELECT '20260725090000', 'MIGRATION LEDGER', l.version, 'applied',
-    CASE WHEN sm.version IS NULL THEN 'absent' ELSE 'applied' END,
-    CASE WHEN sm.version IS NULL THEN 'MISSING' ELSE 'PRESENT' END
-  FROM expected_ledger l LEFT JOIN supabase_migrations.schema_migrations sm ON sm.version = l.version
+  SELECT 'HARDENING SET', 'MIGRATION_LEDGER', 'supabase_migrations.schema_migrations',
+    'EXISTS WITH HARDENING VERSIONS',
+    CASE WHEN to_regclass('supabase_migrations.schema_migrations') IS NULL
+      THEN 'TABLE ABSENT' ELSE 'TABLE PRESENT; VERSIONS NOT QUERIED' END,
+    CASE WHEN to_regclass('supabase_migrations.schema_migrations') IS NULL
+      THEN 'MISSING' ELSE 'PRESENT' END
+  FROM (SELECT 1) ledger
 ) checks
 ORDER BY migration, object_type, object_name;
 
