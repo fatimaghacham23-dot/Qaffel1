@@ -32,3 +32,11 @@ key. Consequently, no schema parity claim can be made.
 No discrepancy has been verified, therefore no corrective migration has been
 created and none may be applied. Any future migration must document lock level,
 data impact, rollback, verification query, and explicit production approval.
+
+## Current hosted-validation status
+
+A compact SQL-Editor-safe companion script is available at
+[`production-supabase-audit-paste-ready.sql`](production-supabase-audit-paste-ready.sql).
+It has not been run because this workspace has no authorised database session.
+No live discrepancy can yet be asserted; the absence of evidence is not evidence
+of parity.

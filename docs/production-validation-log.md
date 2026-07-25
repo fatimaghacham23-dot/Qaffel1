@@ -90,3 +90,14 @@ The legacy Playwright global setup is restricted to a disposable localhost Supab
 ### Arabic public payment
 
 The public payment route accepts only `?lang=en` and `?lang=ar`, preserves existing safe query parameters when switching, sets `lang` and `dir` at the document and page-scope levels, and localizes the proof-upload workflow including validation, file-size/type errors, upload state, review explanation, amount fields, receipt hint, preview label, and note field. Currency values remain formatted through the existing USD/LBP payment path. Browser/mobile visual validation remains pending a dedicated QA public token or safe local stack.
+## 2026-07-25 — approved dependency audit and public-hosted test separation
+
+| Command | Exit | Result |
+|---|---:|---|
+| `npm audit --omit=dev` | 0 | `found 0 vulnerabilities`. |
+
+Public browser tests now run in the `hosted-public` Playwright project and have no global fixture setup, authentication, service-role dependency, or write action. The legacy browser workflow is isolated under `authenticated-qa` and cannot start against a hosted target through its local fixture setup.
+
+The hosted URL and a valid, non-sensitive public payment token are not configured in this workspace, so no hosted Playwright page was opened. The exact public test command is `E2E_TARGET=hosted E2E_BASE_URL=<https-hosted-url> npx playwright test --project=hosted-public --workers=1`. It will execute invalid-token checks without authentication; its valid-page Arabic/mobile test is skipped unless `E2E_PUBLIC_PAYMENT_TOKEN` is provided.
+Follow-up: after correcting an over-escaped Playwright `testMatch` pattern, `npx playwright test --project=hosted-public --list` exits `0` and discovers **2** public-safe tests. The earlier no-test discovery result is superseded.
+Hosted execution guard verification: `E2E_TARGET=hosted npx playwright test --project=hosted-public --workers=1` exited `1` with `Hosted Playwright requires E2E_BASE_URL; refusing to guess a production domain.` No browser or hosted service was contacted.
