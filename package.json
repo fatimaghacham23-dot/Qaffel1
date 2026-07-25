@@ -11,6 +11,7 @@
     "smoke": "node scripts/smoke-routes.mjs",
     "release:check": "node scripts/release-check.mjs",
     "migrations:check": "node scripts/check-migrations.mjs",
+    "urls:check": "node scripts/check-production-urls.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "security:audit:all": "npm audit --audit-level=high",
     "e2e": "playwright test",
