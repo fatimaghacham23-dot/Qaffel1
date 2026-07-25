@@ -1,3 +1,4 @@
+import "server-only";
 type RpcResult = {
   data: unknown;
   error: { message: string } | null;

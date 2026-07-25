@@ -1,6 +1,7 @@
+import "server-only";
 import Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { appUrl } from "@/lib/env";
+import { getServerEnvironment, requireStripeWebhookSecret } from "@/lib/env-server";
 import { shouldApplyStripeEvent } from "@/lib/stripe-webhook";
 import {
   WORKSPACE_PLAN_DEFINITIONS,
@@ -49,17 +50,17 @@ const READ_ONLY_STATUSES = new Set<SubscriptionStatus>(["paused", "canceled", "a
 let stripeClient: Stripe | null = null;
 
 function billingBaseUrl() {
-  return (appUrl || "http://localhost:3000").replace(/\/+$/, "");
+  return getServerEnvironment().appUrl;
 }
 
 function getStripeSecretKey() {
-  return process.env.STRIPE_SECRET_KEY?.trim() || "";
+  return getServerEnvironment().stripeSecretKey || "";
 }
 
 export function getStripe() {
   const secretKey = getStripeSecretKey();
   if (!secretKey) {
-    throw new Error("STRIPE_SECRET_KEY is required for subscription billing.");
+    throw new Error("Stripe billing is not configured.");
   }
 
   if (!stripeClient) {
@@ -70,11 +71,7 @@ export function getStripe() {
 }
 
 export function getStripeWebhookSecret() {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || "";
-  if (!secret) {
-    throw new Error("STRIPE_WEBHOOK_SECRET is required for Stripe webhooks.");
-  }
-  return secret;
+  return requireStripeWebhookSecret();
 }
 
 export function isStripeProviderConfigured() {

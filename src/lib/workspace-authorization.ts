@@ -1,3 +1,4 @@
+import "server-only";
 import type { Permission, WorkspaceRole } from "@/lib/permissions";
 import { requirePermission } from "@/lib/permissions";
 
