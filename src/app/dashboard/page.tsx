@@ -18,7 +18,7 @@ import {
   type DashboardInvoice,
   type DashboardPayment
 } from "@/lib/dashboard";
-import { isOutstandingInvoice, remainingForInvoice } from "@/lib/collection";
+import { getOutstandingBalance, isAcceptedNonVoidedPayment, isOutstandingInvoice } from "@/lib/collection";
 import { money } from "@/lib/format";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { dashboardScope } from "@/lib/dashboard-scope";
@@ -46,13 +46,13 @@ function groupedMoney(values: Record<"USD" | "LBP", number>) {
 function cashFlowPreview(input: { invoices: DashboardInvoice[]; payments: DashboardPayment[]; now: Date }) {
   const activity = { USD: 0, LBP: 0 };
   for (const payment of input.payments) {
-    if (payment.status !== "accepted" || payment.voided_at) continue;
+    if (!isAcceptedNonVoidedPayment(payment)) continue;
     activity.USD += Number(payment.amount_usd || 0);
     activity.LBP += Number(payment.amount_lbp || 0);
   }
   for (const invoice of input.invoices) {
     if (!isOutstandingInvoice(invoice)) continue;
-    const remaining = remainingForInvoice(invoice);
+    const remaining = getOutstandingBalance(invoice);
     activity[remaining.primaryCurrency] += remaining.primaryBalance;
   }
   const currency: "USD" | "LBP" = activity.USD > 0 || activity.LBP === 0 ? "USD" : "LBP";
@@ -70,7 +70,7 @@ function cashFlowPreview(input: { invoices: DashboardInvoice[]; payments: Dashbo
     let collected = 0;
     let expected = 0;
     for (const payment of input.payments) {
-      if (payment.status !== "accepted" || payment.voided_at) continue;
+      if (!isAcceptedNonVoidedPayment(payment)) continue;
       const timestamp = payment.confirmed_at || payment.reviewed_at;
       if (!timestamp) continue;
       const paidAt = new Date(timestamp);
@@ -79,7 +79,7 @@ function cashFlowPreview(input: { invoices: DashboardInvoice[]; payments: Dashbo
     for (const invoice of input.invoices) {
       if (!isOutstandingInvoice(invoice) || !invoice.due_date) continue;
       const due = new Date(`${invoice.due_date}T00:00:00`);
-      const remaining = remainingForInvoice(invoice);
+      const remaining = getOutstandingBalance(invoice);
       if (remaining.primaryCurrency === currency && due >= from && due < to) expected += remaining.primaryBalance;
     }
     return { label: bucket.label, collected, expected };

@@ -1,5 +1,6 @@
 import { isQuoteDocument } from "@/lib/documents";
-import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
+import { getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
+import { todayIso } from "@/lib/format";
 import type { InvoiceStatus } from "@/lib/types";
 
 export type CollectionInvoice = {
@@ -22,9 +23,10 @@ export const emptyCurrencyTotals = (): CurrencyTotals => ({ USD: 0, LBP: 0 });
  * invoices do not count; only accepted, non-voided proofs reduce an outstanding balance.
  * Dates use the application's established date-only comparison.
  */
-export function collectionStatus(invoice: CollectionInvoice) {
-  const proofs = invoice.payment_proofs || [];
-  return getDisplayInvoiceStatus({ ...invoice, status: reconcileInvoiceStatus(invoice, proofs) });
+export function collectionStatus(invoice: CollectionInvoice, today = todayIso()) {
+  const status = reconcileInvoiceStatus(invoice, invoice.payment_proofs || []);
+  if ((status === "sent" || status === "unpaid") && invoice.due_date && invoice.due_date < today) return "overdue";
+  return status;
 }
 
 export function proofDisplayStatus(status: string | null | undefined) {
@@ -38,8 +40,8 @@ export function isOutstandingInvoice(invoice: CollectionInvoice) {
   return ["sent", "unpaid", "partial", "overdue"].includes(collectionStatus(invoice));
 }
 
-export function isOverdueInvoice(invoice: CollectionInvoice) {
-  return isOutstandingInvoice(invoice) && collectionStatus(invoice) === "overdue";
+export function isOverdueInvoice(invoice: CollectionInvoice, today = todayIso()) {
+  return isOutstandingInvoice(invoice) && collectionStatus(invoice, today) === "overdue";
 }
 
 export function remainingForInvoice(invoice: CollectionInvoice) {
@@ -73,5 +75,5 @@ export function isPaidInvoice(invoice: CollectionInvoice) { return isActiveInvoi
 export function isPartiallyPaidInvoice(invoice: CollectionInvoice) { return isActiveInvoice(invoice) && collectionStatus(invoice) === "partial" && remainingForInvoice(invoice).primaryBalance > 0; }
 export function isUnpaidInvoice(invoice: CollectionInvoice) { return isActiveInvoice(invoice) && ["sent", "unpaid"].includes(collectionStatus(invoice)) && remainingForInvoice(invoice).primaryBalance > 0; }
 export function getOutstandingBalance(invoice: CollectionInvoice) { return isOutstandingInvoice(invoice) ? remainingForInvoice(invoice) : { ...remainingForInvoice(invoice), primaryBalance: 0, usd: 0, lbp: 0 }; }
-export function isAcceptedNonVoidedPayment(payment: MinimalProof) { return payment.status === "accepted" && !payment.voided_at; }
-export function isDueWithinSevenDays(invoice: CollectionInvoice, today: string, sevenDays: string) { return isOutstandingInvoice(invoice) && Boolean(invoice.due_date) && invoice.due_date! >= today && invoice.due_date! <= sevenDays; }
+export function isAcceptedNonVoidedPayment(payment: Pick<MinimalProof, "voided_at"> & { status?: string | null }) { return payment.status === "accepted" && !payment.voided_at; }
+export function isDueWithinSevenDays(invoice: CollectionInvoice, today: string, sevenDays: string) { return isOutstandingInvoice(invoice) && !isOverdueInvoice(invoice, today) && Boolean(invoice.due_date) && invoice.due_date! >= today && invoice.due_date! <= sevenDays; }

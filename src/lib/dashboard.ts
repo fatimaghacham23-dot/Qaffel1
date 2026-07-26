@@ -1,7 +1,10 @@
 import { isQuoteDocument } from "@/lib/documents";
 import {
-  collectionTotals,
   emptyCurrencyTotals,
+  getOutstandingBalance,
+  isAcceptedNonVoidedPayment,
+  isDueWithinSevenDays,
+  isOverdueInvoice,
   isOutstandingInvoice,
   remainingForInvoice,
   type CollectionInvoice,
@@ -137,7 +140,7 @@ export function dashboardMetrics(input: {
   const collected = emptyCurrencyTotals();
 
   for (const payment of input.payments) {
-    if (payment.status !== "accepted" || payment.voided_at) continue;
+    if (!isAcceptedNonVoidedPayment(payment)) continue;
     const stamp = payment.confirmed_at || payment.reviewed_at;
     if (!stamp) continue;
     const paidAt = new Date(stamp);
@@ -147,15 +150,17 @@ export function dashboardMetrics(input: {
   }
 
   const billable = input.invoices.filter((invoice) => !isQuoteDocument(invoice));
-  const totals = collectionTotals(billable);
+  const outstanding = emptyCurrencyTotals();
+  const overdue = emptyCurrencyTotals();
   const expectedNextSevenDays = emptyCurrencyTotals();
   for (const invoice of billable) {
-    if (!isOutstandingInvoice(invoice) || !invoice.due_date || invoice.due_date < today || invoice.due_date > sevenDaysIso) continue;
-    const remaining = remainingForInvoice(invoice);
-    expectedNextSevenDays[remaining.primaryCurrency] += remaining.primaryBalance;
+    const balance = getOutstandingBalance(invoice);
+    if (isOutstandingInvoice(invoice)) outstanding[balance.primaryCurrency] += balance.primaryBalance;
+    if (isOverdueInvoice(invoice, today)) overdue[balance.primaryCurrency] += balance.primaryBalance;
+    if (isDueWithinSevenDays(invoice, today, sevenDaysIso)) expectedNextSevenDays[balance.primaryCurrency] += balance.primaryBalance;
   }
 
-  return { collected, outstanding: totals.outstanding, overdue: totals.overdue, expectedNextSevenDays };
+  return { collected, outstanding, overdue, expectedNextSevenDays };
 }
 
 export type DashboardActionItem = {

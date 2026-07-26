@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isOutstandingInvoice, remainingForInvoice, type CollectionInvoice } from "@/lib/collection";
+import { isDueWithinSevenDays, isOverdueInvoice, isPartiallyPaidInvoice, type CollectionInvoice } from "@/lib/collection";
 import { isQuoteDocument } from "@/lib/documents";
 import { hasPermission, type Permission, type WorkspaceRole } from "@/lib/permissions";
 
@@ -39,9 +39,9 @@ export function buildDerivedNotifications(input: NotificationDerivationInput): D
   if (input.rejectedProofCount) items.push(notification("payments:rejected-proofs", "payments", "warning", "Rejected payment proofs need follow-up", `${input.rejectedProofCount} rejected proof${input.rejectedProofCount === 1 ? " requires" : "s require"} an operational follow-up.`, "Rejected proof submissions are present.", "/payments?view=rejected", reviewRoles, "Open rejected proofs"));
 
   const invoices = input.invoices.filter((invoice) => !isQuoteDocument(invoice));
-  const overdue = invoices.filter((invoice) => isOutstandingInvoice(invoice) && Boolean(invoice.due_date) && invoice.due_date! < today).length;
-  const dueSoon = invoices.filter((invoice) => isOutstandingInvoice(invoice) && Boolean(invoice.due_date) && invoice.due_date! >= today && invoice.due_date! <= sevenDays).length;
-  const partial = invoices.filter((invoice) => isOutstandingInvoice(invoice) && remainingForInvoice(invoice).primaryBalance > 0 && (invoice.payment_proofs || []).some((proof) => proof.status === "accepted" && !proof.voided_at)).length;
+  const overdue = invoices.filter((invoice) => isOverdueInvoice(invoice, today)).length;
+  const dueSoon = invoices.filter((invoice) => isDueWithinSevenDays(invoice, today, sevenDays)).length;
+  const partial = invoices.filter((invoice) => isPartiallyPaidInvoice(invoice)).length;
   if (overdue) items.push(notification("collections:overdue", "collections", "critical", "Overdue invoices need follow-up", `${overdue} invoice${overdue === 1 ? " is" : "s are"} overdue with an outstanding balance.`, "Outstanding invoices are past their due date.", "/invoices?status=overdue", invoiceRoles, "View overdue invoices"));
   if (dueSoon) items.push(notification("collections:due-soon", "collections", "warning", "Invoices are due soon", `${dueSoon} outstanding invoice${dueSoon === 1 ? " is" : "s are"} due within seven days.`, "Outstanding invoices have an approaching due date.", "/invoices", invoiceRoles, "Open invoices"));
   if (partial) items.push(notification("collections:partial-balances", "collections", "warning", "Partial payments have remaining balances", `${partial} invoice${partial === 1 ? " has" : "s have"} accepted payment activity and a remaining balance.`, "Accepted non-voided payments do not yet settle the full invoice balance.", "/invoices?status=partial", invoiceRoles, "Review balances"));
