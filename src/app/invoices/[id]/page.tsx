@@ -50,7 +50,7 @@ import { parsePaymentPlan } from "@/lib/payment-plan";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { hasPermission } from "@/lib/permissions";
 import {
-  computeRecoveryForInvoice,
+  deriveRecoveryEngineCurrencyModel,
   recoveryNextActionLabel,
   recoveryTierLabel,
   responsivenessLabel,
@@ -145,7 +145,7 @@ export default async function InvoiceDetailPage({
     supabase
       .from("invoices")
       .select(
-        "id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, exchange_rate_lbp_per_usd, payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
+        "id, workspace_id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
       )
       .eq("workspace_id", ctx.workspaceId),
     supabase
@@ -241,12 +241,13 @@ export default async function InvoiceDetailPage({
       metadata: (e.metadata as Record<string, unknown>) || null
     })
   );
-  const recovery = computeRecoveryForInvoice({
-    invoice: recoveryInvoiceRow,
-    proofs: minimalProofs,
+  const recoveryModel = deriveRecoveryEngineCurrencyModel({
+    workspaceId: ctx.workspaceId,
+    invoices: [{ ...recoveryInvoiceRow, workspace_id: ctx.workspaceId }, ...recoveryAll.map((row) => ({ ...row, workspace_id: ctx.workspaceId, payment_proofs: row.payment_proofs || [] }))],
     events: recoveryEvents,
-    allUserInvoices: recoveryAll.map((r) => ({ ...r, payment_proofs: r.payment_proofs || [] }))
+    nowMs: new Date().getTime()
   });
+  const recovery = recoveryModel.currencyGroups.flatMap((group) => group.candidates).find((candidate) => candidate.candidateKey === recoveryInvoiceRow.id) || null;
   const isQuote = isQuoteDocument(invoice);
   const displayStatus = isQuote
     ? documentStatus({ ...invoice, status: reconciledStatus })
@@ -606,7 +607,7 @@ export default async function InvoiceDetailPage({
                 <div>
                   <h2 className="text-lg font-bold text-ink">Recovery overview</h2>
                   <p className="mt-1 text-xs text-slate-600">
-                    Priority tier: {recoveryTierLabel(recovery.tier)}. Derived from due dates,
+                    {recovery.tier ? `Priority tier: ${recoveryTierLabel(recovery.tier)}.` : "Priority score unavailable. No native amount threshold configured for this currency."} Derived from due dates,
                     balances, reminders you copied, portal views, and this client&apos;s paid history.
                   </p>
                 </div>

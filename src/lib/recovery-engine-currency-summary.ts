@@ -107,6 +107,8 @@ export type RecoveryEngineCurrencyInput = {
   nowMs: number;
 };
 
+export const RECOVERY_USD_AMOUNT_PRIORITY_THRESHOLD = 8_000;
+
 const currencyPattern = /^[A-Z]{3}$/;
 
 function normaliseCurrency(value: string): string | null {

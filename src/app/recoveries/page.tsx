@@ -11,27 +11,25 @@ import { hasPermission, ROLE_LABELS } from "@/lib/permissions";
 import { parsePaymentPlan } from "@/lib/payment-plan";
 import { paymentPlanProgress } from "@/lib/payment-plan";
 import {
-  computeRecoveryForInvoice,
   computeReminderStageOutcomes,
-  recoveryKpis,
+  deriveRecoveryEngineCurrencyModel,
   recoveryNextActionLabel,
   recoveryTierLabel,
   responsivenessLabel,
   type InvoiceEventRow,
-  type RecoveryComputation,
   type RecoveryInvoiceRow
 } from "@/lib/recovery-engine";
 import { reconcileInvoiceStatus } from "@/lib/status";
 import { requireUser } from "@/lib/supabase/server";
 
-function tierTone(tier: RecoveryComputation["tier"]) {
+function tierTone(tier: "low_risk" | "attention" | "recovery_risk" | "critical") {
   if (tier === "critical") return "danger" as const;
   if (tier === "recovery_risk") return "recovery_risk" as const;
   if (tier === "attention") return "pending" as const;
   return "complete" as const;
 }
 
-function bucketTitle(b: RecoveryComputation["bucket"]) {
+function bucketTitle(b: "recent" | "aging" | "critical") {
   if (b === "recent") return "Recently overdue";
   if (b === "aging") return "Aging overdue";
   return "Critical overdue";
@@ -48,7 +46,7 @@ export default async function RecoveriesPage() {
     supabase
       .from("invoices")
       .select(
-        "id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, invoice_number, title, public_token, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, exchange_rate_lbp_per_usd, payment_plan, clients(name, phone, email), payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
+        "id, workspace_id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, invoice_number, title, public_token, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, payment_plan, clients(name, phone, email), payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
       )
       .eq("workspace_id", ctx.workspaceId)
       .order("due_date", { ascending: true }),
@@ -69,26 +67,10 @@ export default async function RecoveriesPage() {
     payment_proofs: inv.payment_proofs || []
   }));
 
-  const computations: RecoveryComputation[] = [];
-  for (const inv of rows) {
-    const proofs = (inv.payment_proofs || []).map((p) => ({
-      status: p.status || "",
-      amount_usd: p.amount_usd,
-      amount_lbp: p.amount_lbp
-    }));
-    const rec = computeRecoveryForInvoice({
-      invoice: { ...inv, payment_proofs: inv.payment_proofs || [] },
-      proofs,
-      events: ev,
-      allUserInvoices: allForStats
-    });
-    if (rec) computations.push(rec);
-  }
-
-  computations.sort((a, b) => b.priorityScore - a.priorityScore);
-
-  const kpis = recoveryKpis(computations);
+  const recoveryModel = deriveRecoveryEngineCurrencyModel({ workspaceId: ctx.workspaceId, invoices: rows, events: ev, nowMs: anchor.getTime() + 120 * 86400000 });
+  const computations = recoveryModel.currencyGroups.flatMap((group) => group.candidates);
   const stageOutcomes = computeReminderStageOutcomes(ev);
+
 
   let plansAllMilestonesMarked = 0;
   for (const inv of rows) {
@@ -129,21 +111,21 @@ export default async function RecoveriesPage() {
 
       <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="q-surface p-5">
-          <p className="q-section-label">Overdue recoverable (USD)</p>
-          <p className="q-kpi-secondary mt-2">{money(kpis.overdueRecoverableUsd, "USD")}</p>
+          <p className="q-section-label">Recovery candidates</p>
+          <p className="q-kpi-secondary mt-2">{recoveryModel.shared.candidateCount}</p>
         </div>
         <div className="q-surface p-5">
-          <p className="q-section-label">Overdue recoverable (LBP)</p>
-          <p className="q-kpi-secondary mt-2">{money(kpis.overdueRecoverableLbp, "LBP")}</p>
+          <p className="q-section-label">Priority score unavailable</p>
+          <p className="q-kpi-secondary mt-2">{recoveryModel.shared.amountPriorityUnavailableCount}</p>
         </div>
         <div className="q-surface p-5">
           <p className="q-section-label">Avg days overdue (this list)</p>
-          <p className="q-kpi-secondary mt-2">{kpis.avgDaysOverdue}</p>
+          <p className="q-kpi-secondary mt-2">{recoveryModel.shared.averageDaysOverdue}</p>
         </div>
         <div className="q-surface p-5">
           <p className="q-section-label">Reminder copies (60d, listed)</p>
-          <p className="q-kpi-secondary mt-2">{kpis.remindersLast60d}</p>
-          <p className="q-caption mt-2">{kpis.partialCount} partial · {kpis.criticalCount} critical tier</p>
+          <p className="q-kpi-secondary mt-2">{recoveryModel.shared.remindersLast60d}</p>
+          <p className="q-caption mt-2">{recoveryModel.shared.partialCount} partial · {recoveryModel.shared.criticalCount} critical tier</p>
         </div>
       </div>
 
@@ -201,11 +183,10 @@ export default async function RecoveriesPage() {
             <h2 className="q-headline mb-4">{bucketTitle(bucket)}</h2>
             <div className="grid gap-4">
               {list.map((c) => {
-                const inv = invById.get(c.invoiceId);
+                const inv = invById.get(c.candidateKey);
                 if (!inv) return null;
-                const primary = (inv.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
-                const overdueLabel =
-                  primary === "USD" ? money(c.overdueAmountUsd, "USD") : money(c.overdueAmountLbp, "LBP");
+                const primary = c.currency === "LBP" ? "LBP" : "USD";
+                const overdueLabel = money(c.outstanding, primary);
                 const plan = parsePaymentPlan(inv.payment_plan);
                 const planProg = plan ? paymentPlanProgress(plan) : null;
                 const proofs = inv.payment_proofs || [];
@@ -216,14 +197,14 @@ export default async function RecoveriesPage() {
 
                 return (
                   <div
-                    key={c.invoiceId}
+                    key={c.candidateKey}
                     className="q-surface-hover overflow-hidden rounded-2xl border border-slate-200/60 bg-white/95 shadow-card"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/80 p-4">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <StatusBadge status={tierTone(c.tier)} label={recoveryTierLabel(c.tier)} />
-                          <span className="text-xs font-semibold text-slate-500">Rule-based tier</span>
+                          {c.tier ? <StatusBadge status={tierTone(c.tier)} label={recoveryTierLabel(c.tier)} /> : <span className="text-xs font-semibold text-slate-700">Priority score unavailable</span>}
+                          <span className="text-xs font-semibold text-slate-500">{c.tier ? `Priority score: ${c.priorityScore}` : "No native amount threshold configured for this currency"}</span>
                         </div>
                         <p className="mt-2 font-semibold text-ink">
                           {inv.invoice_number ? `${inv.invoice_number} · ` : ""}
