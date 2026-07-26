@@ -344,7 +344,7 @@ function ProofStatusMessage({ proof }: { proof: PaymentProofTableItem }) {
     return (
       <div className="mt-1 text-xs text-slate-500">
         <span className="font-semibold text-slate-700">Payment voided</span>
-        {proof.void_reason ? <span className="italic">: {proof.void_reason}</span> : null}
+        {proof.void_reason ? <span className="break-words italic">: {proof.void_reason}</span> : null}
       </div>
     );
   }
@@ -510,10 +510,10 @@ function ProofMobileCard({
         <ProofPreview proof={proof} />
         <div className="min-w-0 flex-1">
           <Link className="block font-semibold text-ink" href={invoiceHref}>
-            <span className="block truncate">{proof.invoices?.invoice_number || "Invoice"}</span>
-            <span className="block truncate text-xs font-normal text-slate-500">{proof.invoices?.title || "Untitled invoice"}</span>
+            <span className="block break-words" title={proof.invoices?.invoice_number || "Invoice"}>{proof.invoices?.invoice_number || "Invoice"}</span>
+            <span className="block break-words text-xs font-normal text-slate-500" title={proof.invoices?.title || "Untitled invoice"}>{proof.invoices?.title || "Untitled invoice"}</span>
           </Link>
-          <p className="mt-1 truncate text-xs text-slate-500">{proof.invoices?.clients?.name || "No client"}</p>
+          <p className="mt-1 break-words text-xs text-slate-500" title={proof.invoices?.clients?.name || "No client"}>{proof.invoices?.clients?.name || "No client"}</p>
           <ProofAssignmentBadges assignments={proof.assignments} />
         </div>
         <ProofActions proof={proof} />
@@ -866,7 +866,7 @@ export function PaymentProofsTable({
             </div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-ink">Proof queue shortcuts</p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">
+              <p className="mt-0.5 break-words text-xs text-slate-500">
                 Active {safeActiveIndex + 1} of {filteredProofs.length}: {activeProof?.invoices?.invoice_number || activeProof?.invoices?.title || "Proof"}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
@@ -1037,8 +1037,8 @@ export function PaymentProofsTable({
                       </TableCell>
                       <TableCell className="max-w-0">
                         <Link className="block min-w-0 font-semibold text-ink transition hover:text-cedar" href={invoiceHref}>
-                          <span className="block truncate">{proof.invoices?.invoice_number || "Invoice"}</span>
-                          <span className="block truncate text-xs font-normal text-slate-500">{proof.invoices?.title || "Untitled invoice"}</span>
+                          <span className="block break-words" title={proof.invoices?.invoice_number || "Invoice"}>{proof.invoices?.invoice_number || "Invoice"}</span>
+                          <span className="block break-words text-xs font-normal text-slate-500" title={proof.invoices?.title || "Untitled invoice"}>{proof.invoices?.title || "Untitled invoice"}</span>
                         </Link>
                         <ProofAssignmentBadges assignments={proof.assignments} />
                       </TableCell>

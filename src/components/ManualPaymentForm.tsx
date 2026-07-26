@@ -75,7 +75,7 @@ export function ManualPaymentForm({ invoiceId, isPaid }: { invoiceId: string; is
 
   return (
     <div id="manual-payment" className="panel scroll-mt-24">
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-bold text-ink">Record manual payment</h2>
         {showForm && (
           <button 
@@ -155,7 +155,7 @@ export function ManualPaymentForm({ invoiceId, isPaid }: { invoiceId: string; is
         </div>
 
         <button 
-          className="btn btn-primary w-fit" 
+          className="btn btn-primary w-full sm:w-fit"
           type="submit" 
           disabled={isPending}
         >
