@@ -1,0 +1,5 @@
+export type CurrencyAmount={currency:string;amount:number};export type CurrencyTotal={currency:string;amount:number};
+const validCurrency=(currency:string)=>/^[A-Z]{3}$/.test(currency);
+/** Groups explicit amounts by their own ISO currency. Values are summed in fixed six-decimal units, never converted. */
+export function groupAmountsByCurrency(entries:ReadonlyArray<CurrencyAmount>):CurrencyTotal[]{const totals=new Map<string,number>();for(const entry of entries){const currency=entry.currency.trim().toUpperCase();if(!validCurrency(currency)||!Number.isFinite(entry.amount))continue;const units=Math.round(entry.amount*1_000_000);totals.set(currency,(totals.get(currency)||0)+units)}return[...totals.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([currency,units])=>({currency,amount:Number(units)/1_000_000}))}
+export function formatCurrencyTotal(total:CurrencyTotal){return new Intl.NumberFormat("en-GB",{style:"currency",currency:total.currency,maximumFractionDigits:total.currency==="LBP"?0:2}).format(total.amount)}
