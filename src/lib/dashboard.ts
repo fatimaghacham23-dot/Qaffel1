@@ -48,7 +48,6 @@ export type DashboardQueryPlan = {
   proofs: boolean;
   assignments: boolean;
   events: boolean;
-  onboardingCounts: boolean;
 };
 
 export function dashboardQueryPlan(role: WorkspaceRole): DashboardQueryPlan {
@@ -57,8 +56,7 @@ export function dashboardQueryPlan(role: WorkspaceRole): DashboardQueryPlan {
     invoices: capabilities.showFinancialSummary || capabilities.canCreateInvoice,
     proofs: capabilities.showProofWorkload || capabilities.showFinancialSummary,
     assignments: capabilities.showAssignments,
-    events: capabilities.showActivity,
-    onboardingCounts: role === "owner" || role === "admin"
+    events: capabilities.showActivity
   };
 }
 

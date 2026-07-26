@@ -11,8 +11,8 @@ import {
   dashboardCapabilities,
   dashboardGreeting,
   dashboardMetrics,
-  dashboardOnboarding,
   dashboardQueryPlan,
+  deriveDashboardOnboardingState,
   type DashboardAssignment,
   type DashboardEvent,
   type DashboardInvoice,
@@ -162,19 +162,9 @@ export default async function DashboardPage() {
         .order("created_at", { ascending: false })
         .limit(DASHBOARD_EVENT_QUERY_LIMIT)
     : emptyResult<DashboardEvent>();
-  const clientCountPromise = plan.onboardingCounts
-    ? supabase.from("clients").select("id", { count: "exact", head: true }).eq(...scope.workspace)
-    : emptyResult<never>();
-  const invoiceCountPromise = plan.onboardingCounts
-    ? supabase.from("invoices").select("id", { count: "exact", head: true }).eq(...scope.workspace).or("document_type.is.null,document_type.neq.quote")
-    : emptyResult<never>();
-  const shareCountPromise = plan.onboardingCounts
-    ? supabase.from("invoice_events").select("id", { count: "exact", head: true }).eq(...scope.workspace).eq("event_type", "reminder_copied")
-    : emptyResult<never>();
-
-  const [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult, eventResult, clientCountResult, invoiceCountResult, shareCountResult] = await Promise.all([
-    invoicePromise, pendingPromise, pendingCountPromise, acceptedPromise, rejectedPromise, assignmentQuery, eventPromise, clientCountPromise, invoiceCountPromise, shareCountPromise
-  ]) as unknown as [Result<DashboardInvoice>, Result<DashboardPayment>, Result<never>, Result<DashboardPayment>, Result<DashboardPayment>, Result<DashboardAssignment>, Result<DashboardEvent>, Result<never>, Result<never>, Result<never>];
+  const [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult, eventResult] = await Promise.all([
+    invoicePromise, pendingPromise, pendingCountPromise, acceptedPromise, rejectedPromise, assignmentQuery, eventPromise
+  ]) as unknown as [Result<DashboardInvoice>, Result<DashboardPayment>, Result<never>, Result<DashboardPayment>, Result<DashboardPayment>, Result<DashboardAssignment>, Result<DashboardEvent>];
 
   const invoices = invoiceResult.data || [];
   const pending = pendingResult.data || [];
@@ -183,7 +173,7 @@ export default async function DashboardPage() {
   const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx)).actionItems;
   const activity = dashboardActivity(eventResult.data || []);
   const onboardingEvidence = await getWorkspaceOnboardingEvidence(supabase, ctx);
-  const onboarding = dashboardOnboarding({ role: ctx.role, evidence: onboardingEvidence });
+  const onboardingState = deriveDashboardOnboardingState({ onboardingEvidence, role: ctx.role, operationalAttention: attention.map((item) => ({ id: item.id, title: item.title, href: item.destinationUrl, label: item.actionLabel || "Open" })) });
   const cashFlow = cashFlowPreview({ invoices, payments: acceptedResult.data || [], now });
   const collectedLabel = groupedMoney(metrics.collected);
   const actionCount = Math.max(attention.length, pendingCountResult.count || 0);
@@ -192,7 +182,7 @@ export default async function DashboardPage() {
     : capabilities.showProofWorkload
       ? `${pendingCountResult.count || 0} ${(pendingCountResult.count || 0) === 1 ? "proof is" : "proofs are"} waiting for review.`
       : "Here are the latest workspace updates available to you.";
-  const partialData = [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult, eventResult, clientCountResult, invoiceCountResult, shareCountResult].some((result) => Boolean(result.error)) || (invoiceResult.count || 0) > DASHBOARD_INVOICE_LIMIT || (acceptedResult.count || 0) > DASHBOARD_INVOICE_LIMIT;
+  const partialData = [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult, eventResult].some((result) => Boolean(result.error)) || (invoiceResult.count || 0) > DASHBOARD_INVOICE_LIMIT || (acceptedResult.count || 0) > DASHBOARD_INVOICE_LIMIT;
 
   return (
     <AppShell role={ctx.role}>
@@ -205,7 +195,7 @@ export default async function DashboardPage() {
           metrics={metrics}
           attention={attention}
           activity={activity}
-          onboarding={onboarding}
+          onboardingState={onboardingState}
           cashFlow={cashFlow.points}
           cashFlowCurrency={cashFlow.currency}
           partialData={partialData}

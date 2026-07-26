@@ -45,7 +45,6 @@ describe("dashboard role visibility and query planning", () => {
       if (plan.proofs) expect(hasPermission(role, "proofs.view")).toBe(true);
       if (plan.assignments) expect(hasPermission(role, "assignments.view")).toBe(true);
       if (plan.events) expect(hasPermission(role, "invoices.view")).toBe(true);
-      if (plan.onboardingCounts) expect(["owner", "admin"]).toContain(role);
     }
     expect(dashboardQueryPlan("reviewer").invoices).toBe(false);
     expect(dashboardQueryPlan("staff").invoices).toBe(false);

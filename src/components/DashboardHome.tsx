@@ -6,7 +6,7 @@ import type {
   DashboardActivityItem,
   DashboardCapabilities,
   DashboardMetrics,
-  DashboardOnboardingStep
+  DashboardOnboardingState
 } from "@/lib/dashboard";
 import type { DerivedNotification } from "@/lib/notifications";
 
@@ -24,35 +24,6 @@ function Metric({ label, value, description, href }: { label: string; value: str
       <p className="mt-3 truncate text-2xl font-semibold tracking-tight text-ink sm:text-[1.7rem]">{value}</p>
       <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
     </Link>
-  );
-}
-
-function Onboarding({ steps, name }: { steps: DashboardOnboardingStep[]; name: string }) {
-  const complete = steps.filter((step) => step.complete).length;
-  const next = steps.find((step) => !step.complete);
-  return (
-    <main className="mx-auto max-w-4xl">
-      <header className="mb-8">
-        <p className="q-section-label">Welcome to Qaffel</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Let’s collect your first payment, {name}.</h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Three clear steps take you from a saved client to a payment link ready for WhatsApp.</p>
-      </header>
-      <section className="overflow-hidden rounded-3xl bg-ink p-6 text-white shadow-card sm:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-white/65">Setup progress</p>
-            <p className="mt-1 text-2xl font-semibold">{complete} of {steps.length} complete</p>
-          </div>
-          <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-white/15" aria-label={`${complete} of ${steps.length} setup steps complete`} role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={complete}>
-            <div className="h-full rounded-full bg-mint transition-all" style={{ width: `${(complete / steps.length) * 100}%` }} />
-          </div>
-        </div>
-        {next ? <div className="mt-8 rounded-2xl bg-white/10 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-mint">Next step</p><h2 className="mt-2 text-xl font-semibold">{next.label}</h2><p className="mt-2 text-sm leading-6 text-white/70">{next.detail}</p></div><Link href={next.href} className="btn mt-5 shrink-0 bg-white text-ink hover:bg-slate-100 sm:mt-0">{next.action}<ArrowRight className="h-4 w-4" /></Link></div> : null}
-      </section>
-      <ol className="mt-6 grid gap-3 md:grid-cols-3">
-        {steps.map((step, index) => <li key={step.id} className={`rounded-2xl p-5 ${step.complete ? "bg-emerald-50/70" : "bg-white shadow-card"}`}><div className={`grid h-8 w-8 place-items-center rounded-full text-sm font-semibold ${step.complete ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"}`}>{step.complete ? <Check className="h-4 w-4" /> : index + 1}</div><h3 className="mt-4 font-semibold text-ink">{step.label}</h3><p className="mt-2 text-sm leading-6 text-slate-500">{step.detail}</p></li>)}
-      </ol>
-    </main>
   );
 }
 
@@ -91,7 +62,7 @@ export function DashboardHome(props: {
   metrics: DashboardMetrics;
   attention: DerivedNotification[];
   activity: DashboardActivityItem[];
-  onboarding: DashboardOnboardingStep[] | null;
+  onboardingState: DashboardOnboardingState;
   cashFlow: CashFlowPoint[];
   cashFlowCurrency: "USD" | "LBP";
   partialData: boolean;
@@ -101,9 +72,9 @@ export function DashboardHome(props: {
     <main className="mx-auto max-w-[1480px]">
       <header className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
         <div className="max-w-2xl"><p className="q-section-label">Home</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{props.greeting}, {props.name}.</h1><p className="mt-3 text-base leading-7 text-slate-600">{props.summary}</p></div>
-        <div className="flex flex-wrap gap-2">{props.capabilities.canCreateInvoice ? <Link href="/invoices/new" className="btn btn-primary">Create invoice</Link> : props.capabilities.canReviewProofs ? <Link href="/payments?view=awaiting" className="btn btn-primary">Review proofs</Link> : <Link href="/invoices" className="btn btn-primary">Open invoices</Link>}</div>
+        <div className="flex flex-wrap gap-2"><Link href={props.onboardingState.primaryAction.href} className="btn btn-primary">{props.onboardingState.primaryAction.label}</Link></div>
       </header>
-      {props.onboarding ? <section className="mb-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">Start by adding a client or creating your first invoice. <Link className="font-semibold text-cedar" href={props.capabilities.canCreateInvoice ? "/invoices/new" : "/clients/new"}>{props.capabilities.canCreateInvoice ? "Create invoice" : "Create client"}</Link><Link className="ml-4 font-semibold text-cedar" href="/notifications">Setup</Link></section> : null}
+      {props.onboardingState.showNewWorkspaceState ? <section className="mb-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">Start with {props.onboardingState.primaryAction.title}. <Link className="font-semibold text-cedar" href={props.onboardingState.primaryAction.href}>{props.onboardingState.primaryAction.label}</Link><Link className="ml-4 font-semibold text-cedar" href={props.onboardingState.notificationDestination}>Setup</Link></section> : null}
       {props.partialData ? <div className="mb-6 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">Some dashboard information could not be refreshed. Available data is shown below.</div> : null}
       {showMetrics ? <section aria-label="Financial summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Collected this month" value={groupedMoney(props.metrics.collected)} description="Accepted, non-voided payments confirmed this month." href="/reports" /><Metric label="Outstanding" value={groupedMoney(props.metrics.outstanding)} description="Remaining balance on active invoices." href="/invoices" /><Metric label="Overdue" value={groupedMoney(props.metrics.overdue)} description="Outstanding balance past its due date." href="/recoveries" /><Metric label="Expected in 7 days" value={groupedMoney(props.metrics.expectedNextSevenDays)} description="Open invoice balances due in the next seven days." href="/invoices" /></section> : null}
       <div className={`mt-7 grid gap-7 ${showMetrics ? "xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]" : "max-w-4xl"}`}>
