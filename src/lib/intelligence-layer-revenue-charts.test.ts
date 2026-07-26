@@ -93,20 +93,40 @@ describe("currency-safe revenue facts", () => {
     expect(value(bundle, "USD", "overdue")).toBe(300);
   });
 
-  it("preserves the continuous 12-month reporting period and legacy KPI fields", () => {
+  it("preserves the continuous 12-month reporting period and derives separate active KPI summaries", () => {
     const bundle = buildIntelligenceBundle({
       workspaceId: "workspace-a",
-      invoices: [invoice("paid", "workspace-a", "USD", [proof("paid", { amount_usd: 100 })])],
+      invoices: [
+        invoice("paid-usd", "workspace-a", "USD", [proof("paid-usd", { amount_usd: 100 })]),
+        invoice("paid-lbp", "workspace-a", "LBP", [proof("paid-lbp", { amount_lbp: 250_000 })]),
+        invoice("quote", "workspace-a", "USD", [proof("quote", { amount_usd: 900 })], { document_type: "quote" })
+      ],
       events: [],
       clients: []
     });
 
-    expect(bundle.revenue.currencyCharts).toHaveLength(1);
-    expect(bundle.revenue.currencyCharts[0].rows).toHaveLength(12);
+    expect(bundle.revenue.currencyCharts).toHaveLength(2);
+    expect(bundle.revenue.currencyCharts.every((chart) => chart.rows.length === 12)).toBe(true);
     expect(bundle.revenue.currencyCharts[0].rows.map((row) => row.month)).toEqual([...bundle.revenue.currencyCharts[0].rows.map((row) => row.month)].sort());
-    expect(bundle.revenue.bestEarningMonthUsd).toBe(100);
-    expect(bundle.revenue.averageInvoiceUsd).toBe(100);
+    expect(bundle.revenue.revenueCurrencyKpis.map((summary) => summary.currency)).toEqual(["LBP", "USD"]);
+    expect(bundle.revenue.revenueCurrencyKpis).toEqual(expect.arrayContaining([
+      expect.objectContaining({ currency: "USD", bestEarningMonth: expect.objectContaining({ amount: 100 }), averageInvoice: 100, collectedToBilledRatio: 1 }),
+      expect.objectContaining({ currency: "LBP", bestEarningMonth: expect.objectContaining({ amount: 250_000 }), averageInvoice: 1_000_000, collectedToBilledRatio: 0.25 })
+    ]));
     expect(value(bundle, "USD", "overdue")).toBe(0);
+  });
+
+  it("keeps the legacy KPI acceptance source semantics while retaining original currency", () => {
+    const bundle = buildIntelligenceBundle({
+      workspaceId: "workspace-a",
+      invoices: [invoice("voided-accepted", "workspace-a", "USD", [proof("voided", { amount_usd: 40, voided_at: occurredAt })])],
+      events: [],
+      clients: []
+    });
+
+    expect(bundle.revenue.revenueCurrencyKpis).toEqual([
+      expect.objectContaining({ currency: "USD", bestEarningMonth: expect.objectContaining({ amount: 40 }), collectedToBilledRatio: 0.4 })
+    ]);
   });
 
   it("returns factual inputs only for supplied active invoices and reporting months", () => {

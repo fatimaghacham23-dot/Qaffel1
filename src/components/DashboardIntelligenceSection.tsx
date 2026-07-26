@@ -3,16 +3,101 @@
 import Link from "next/link";
 import { BarChart3, Filter, Lightbulb, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { money } from "@/lib/format";
+import { formatCurrencyTotal } from "@/lib/currency-totals";
 import type { IntelligenceBundle } from "@/lib/intelligence-layer";
+import type { RevenueCurrencyKpiSummary } from "@/lib/revenue-currency-kpis";
 import { finiteN, safeDays, safeDaysFromHours, safeHours, safePercent } from "@/lib/safe-metrics";
 import { IntelligenceRevenueTrendChart } from "@/components/IntelligenceRevenueTrendChart";
 import { IntelligenceStackedMethodsChart } from "@/components/IntelligenceStackedMethodsChart";
 
-function TrendIcon({ dir }: { dir: IntelligenceBundle["revenue"]["revenueTrend"] }) {
-  if (dir === "up") return <TrendingUp className="h-4 w-4 text-emerald-600" aria-hidden />;
-  if (dir === "down") return <TrendingDown className="h-4 w-4 text-red-600" aria-hidden />;
-  if (dir === "flat") return <Minus className="h-4 w-4 text-slate-500" aria-hidden />;
+function TrendIcon({ direction }: { direction: RevenueCurrencyKpiSummary["revenueTrend"]["direction"] }) {
+  if (direction === "up") return <TrendingUp className="h-4 w-4 text-emerald-600" aria-hidden />;
+  if (direction === "down") return <TrendingDown className="h-4 w-4 text-red-600" aria-hidden />;
+  if (direction === "flat") return <Minus className="h-4 w-4 text-slate-500" aria-hidden />;
   return <BarChart3 className="h-4 w-4 text-slate-400" aria-hidden />;
+}
+
+function trendLabel(direction: RevenueCurrencyKpiSummary["revenueTrend"]["direction"]) {
+  if (direction === "unavailable") return "Unavailable";
+  return direction.charAt(0).toUpperCase() + direction.slice(1);
+}
+
+function monthLabel(month: string) {
+  const date = new Date(`${month}-01T12:00:00`);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" }).format(date)
+    : month;
+}
+
+function currencyAmount(currency: string, amount: number) {
+  return formatCurrencyTotal({ currency, amount });
+}
+
+function RevenueCurrencyKpiGroup({ summary }: { summary: RevenueCurrencyKpiSummary }) {
+  const { currency, bestEarningMonth, averageInvoice, revenueTrend, collectedToBilledRatio } = summary;
+  const headingId = `revenue-kpis-${currency}`;
+
+  return (
+    <section aria-labelledby={headingId} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-soft sm:p-5">
+      <h3 id={headingId} className="text-sm font-bold text-ink">
+        Revenue KPIs — {currency}
+      </h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Best earning month</p>
+          {bestEarningMonth ? (
+            <>
+              <p className="mt-2 text-lg font-bold text-ink">{monthLabel(bestEarningMonth.month)}</p>
+              <p className="break-words text-sm font-semibold text-cedar">{currencyAmount(currency, bestEarningMonth.amount)} collected</p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">No collected revenue in this period</p>
+          )}
+        </div>
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Average invoice</p>
+          {averageInvoice !== null ? (
+            <p className="mt-2 break-words text-lg font-bold text-ink">{currencyAmount(currency, averageInvoice)}</p>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">No eligible invoices</p>
+          )}
+        </div>
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Revenue trend</p>
+            <TrendIcon direction={revenueTrend.direction} />
+          </div>
+          <p className="mt-2 text-sm font-semibold text-ink">{trendLabel(revenueTrend.direction)}</p>
+          {revenueTrend.percentageChange !== null ? (
+            <p className="mt-1 text-[11px] text-slate-600">{safePercent(revenueTrend.percentageChange)} change</p>
+          ) : null}
+          <p className="mt-1 text-[11px] text-slate-500">Latest 3 vs prior 3 months collected</p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Collected / billed</p>
+          {collectedToBilledRatio !== null ? (
+            <p className="mt-2 text-lg font-bold text-ink">{safePercent(collectedToBilledRatio)}</p>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">No billed revenue for ratio</p>
+          )}
+          <p className="mt-1 text-[11px] text-slate-500">Accepted proof amount ÷ billed amount, all time</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function RevenueCurrencyKpiGroups({ summaries }: { summaries: readonly RevenueCurrencyKpiSummary[] }) {
+  if (!summaries.length) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-600" role="status">
+        Revenue KPIs are unavailable for the available revenue facts.
+      </div>
+    );
+  }
+
+  const orderedSummaries = [...summaries].sort((a, b) => a.currency.localeCompare(b.currency));
+  return <div className="space-y-3">{orderedSummaries.map((summary) => <RevenueCurrencyKpiGroup key={summary.currency} summary={summary} />)}</div>;
 }
 
 export function DashboardIntelligenceSection({ bundle }: { bundle: IntelligenceBundle }) {
@@ -43,41 +128,15 @@ export function DashboardIntelligenceSection({ bundle }: { bundle: IntelligenceB
         </Link>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/80 p-4 shadow-soft">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Best earning month</p>
-          <p className="mt-2 text-lg font-bold text-ink">{revenue.bestEarningMonthLabel ?? "—"}</p>
-          <p className="text-sm font-semibold text-cedar">
-            {money(finiteN(revenue.bestEarningMonthUsd), "USD")} collected (approx. USD equivalent)
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Avg invoice (approx. USD)</p>
-          <p className="mt-2 text-lg font-bold text-ink">
-            {revenue.averageInvoiceUsd !== null ? money(finiteN(revenue.averageInvoiceUsd), "USD") : "—"}
-          </p>
-        </div>
+      <RevenueCurrencyKpiGroups summaries={revenue.revenueCurrencyKpis} />
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Avg payment delay</p>
           <p className="mt-2 text-lg font-bold text-ink">
             {safeDays(revenue.averagePaymentDelayDays, 1)}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">First accepted proof vs invoice created</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Revenue trend</p>
-            <TrendIcon dir={revenue.revenueTrend} />
-          </div>
-          <p className="mt-2 text-sm font-semibold capitalize text-ink">{revenue.revenueTrend.replace(/_/g, " ")}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Last 3 vs prior 3 months collected (approx. USD equivalent)</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Collected / billed</p>
-          <p className="mt-2 text-lg font-bold text-ink">
-            {safePercent(revenue.collectedVsBilledRatio)}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">Accepted proof ÷ billed totals (approx. USD equivalent, all time)</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Deposit → paid rate</p>

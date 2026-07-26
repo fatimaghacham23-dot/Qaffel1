@@ -10,6 +10,7 @@ import { getOutstandingBalance, isAcceptedNonVoidedPayment, isActiveInvoice, isO
 import { csvEscapeCell, csvNumber, monthKeySafe } from "@/lib/safe-metrics";
 import { derivePaymentMethodCurrencyCharts, type MonthlyPaymentMethodCurrencyTotal, type PaymentMethodCurrencyChart } from "@/lib/payment-method-currency-charts";
 import { deriveRevenueCurrencyCharts, type MonthlyRevenueCurrencyFact, type RevenueCurrencyChart } from "@/lib/revenue-currency-charts";
+import { deriveRevenueCurrencyKpis, type CollectedBilledCurrencyFact, type InvoiceCurrencyFact, type MonthlyRevenueCurrencyValue, type RevenueCurrencyKpiInput, type RevenueCurrencyKpiSummary } from "@/lib/revenue-currency-kpis";
 import type { InvoiceStatus } from "@/lib/types";
 import type { OCEventRow, OCInvoiceProof, OCInvoiceRow } from "@/lib/operations-center";
 
@@ -79,14 +80,9 @@ function methodKey(m: string | null | undefined): string {
 }
 
 export type RevenueIntelligence = {
-  bestEarningMonthLabel: string | null;
-  bestEarningMonthUsd: number;
-  averageInvoiceUsd: number | null;
+  revenueCurrencyKpis: RevenueCurrencyKpiSummary[];
   averagePaymentDelayDays: number | null;
-  revenueTrend: "up" | "down" | "flat" | "insufficient_data";
-  collectedVsBilledRatio: number | null;
   depositConversionRate: number | null;
-  /** Currency-safe chart contracts. Legacy USD-equivalent KPI fields above remain temporary. */
   currencyCharts: RevenueCurrencyChart[];
 };
 
@@ -279,6 +275,44 @@ export function deriveRevenueCurrencyFacts(input: {
 
   return facts;
 }
+
+/**
+ * Produces factual inputs for the active revenue KPI cards. The caller has
+ * already applied workspace scope and non-quote eligibility. This intentionally
+ * mirrors the legacy KPI source rules without conversion or aggregation.
+ */
+export function deriveRevenueCurrencyKpiFacts(input: {
+  invoices: readonly OCInvoiceRow[];
+  reportingMonths: readonly string[];
+}): RevenueCurrencyKpiInput {
+  const reportingMonthSet = new Set(input.reportingMonths);
+  const monthlyValues: MonthlyRevenueCurrencyValue[] = [];
+  const invoiceFacts: InvoiceCurrencyFact[] = [];
+  const collectedBilledFacts: CollectedBilledCurrencyFact[] = [];
+
+  for (const invoice of input.invoices) {
+    const currency = revenueCurrency(invoice);
+    if (!currency) continue;
+    const billedAmount = revenueAmount(invoice, null, currency);
+    invoiceFacts.push({ currency, amount: billedAmount, eligibleForAverage: true });
+    collectedBilledFacts.push({ currency, billed: billedAmount, collected: 0 });
+
+    // The old best-month and trend loop skipped records without a created date.
+    const canContributeToMonthlyKpis = Boolean(invoice.created_at);
+    for (const proof of invoice.payment_proofs || []) {
+      // Intentionally matches the legacy KPI status test; void semantics remain unchanged here.
+      if ((proof.status || "").toLowerCase() !== "accepted") continue;
+      const amount = revenueAmount(invoice, proof, currency);
+      collectedBilledFacts.push({ currency, billed: 0, collected: amount });
+      if (!canContributeToMonthlyKpis) continue;
+      const month = monthKeySafe(proof.confirmed_at || proof.uploaded_at);
+      if (!month || !reportingMonthSet.has(month)) continue;
+      monthlyValues.push({ month, currency, collected: amount, billed: 0 });
+    }
+  }
+
+  return { reportingMonths: input.reportingMonths, monthlyValues, invoiceFacts, collectedBilledFacts };
+}
 export function buildIntelligenceBundle(input: {
   workspaceId: string;
   invoices: OCInvoiceRow[];
@@ -340,21 +374,9 @@ export function buildIntelligenceBundle(input: {
     deriveRevenueCurrencyFacts({ invoices: billable, reportingMonths }),
     { reportingMonths }
   );
-
-  let bestKey: string | null = null;
-  let bestUsd = 0;
-  for (const [k, v] of collectedByMonth) {
-    if (v > bestUsd) {
-      bestUsd = v;
-      bestKey = k;
-    }
-  }
-  const bestLabel = bestKey ? last12.find((x) => x.key === bestKey)?.label ?? bestKey : null;
-
-  const invoiceSizes = billable
-    .map((i) => toApproxUsd(i, invoiceBilledPrimary(i)))
-    .filter((n) => n > 0);
-  const averageInvoiceUsd = invoiceSizes.length ? invoiceSizes.reduce((a, b) => a + b, 0) / invoiceSizes.length : null;
+  const revenueCurrencyKpis = deriveRevenueCurrencyKpis(
+    deriveRevenueCurrencyKpiFacts({ invoices: billable, reportingMonths })
+  );
 
   const delays: number[] = [];
   for (const inv of billable) {
@@ -370,28 +392,6 @@ export function buildIntelligenceBundle(input: {
     if (first !== Infinity && first >= created) delays.push((first - created) / MS_DAY);
   }
   const averagePaymentDelayDays = delays.length ? delays.reduce((a, b) => a + b, 0) / delays.length : null;
-
-  const last3 = last12.slice(-3);
-  const prev3 = last12.slice(-6, -3);
-  const sumCollected = (keys: typeof last12) => keys.reduce((s, k) => s + (collectedByMonth.get(k.key) || 0), 0);
-  const a = sumCollected(last3) / 3;
-  const b = sumCollected(prev3) / 3;
-  let revenueTrend: RevenueIntelligence["revenueTrend"] = "insufficient_data";
-  if (billable.length >= 6) {
-    if (a > b * 1.08) revenueTrend = "up";
-    else if (a < b * 0.92) revenueTrend = "down";
-    else revenueTrend = "flat";
-  }
-
-  let totalBilled = 0;
-  let totalCollected = 0;
-  for (const inv of billable) {
-    totalBilled += toApproxUsd(inv, invoiceBilledPrimary(inv));
-    for (const p of inv.payment_proofs || []) {
-      if ((p.status || "").toLowerCase() === "accepted") totalCollected += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-    }
-  }
-  const collectedVsBilledRatio = totalBilled > 0 ? totalCollected / totalBilled : null;
 
   const withDep = billable.filter((i) => Boolean(i.deposit_enabled));
   const depPaid = withDep.filter((i) => display(i) === "paid").length;
@@ -834,12 +834,8 @@ export function buildIntelligenceBundle(input: {
   const paymentMethodCurrencyCharts = derivePaymentMethodCurrencyCharts(paymentMethodFacts);
 
   const revenue: RevenueIntelligence = {
-    bestEarningMonthLabel: bestLabel,
-    bestEarningMonthUsd: bestUsd,
-    averageInvoiceUsd,
+    revenueCurrencyKpis,
     averagePaymentDelayDays,
-    revenueTrend,
-    collectedVsBilledRatio,
     depositConversionRate,
     currencyCharts
   };
