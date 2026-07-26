@@ -6,10 +6,11 @@
 import { documentStatus, isQuoteDocument } from "@/lib/documents";
 import { formatPaymentMethod, money, todayIso } from "@/lib/format";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
-import { getOutstandingBalance, isAcceptedNonVoidedPayment, isActiveInvoice, isOutstandingInvoice, type CollectionInvoice } from "@/lib/collection";
+import { getOutstandingBalance, isAcceptedNonVoidedPayment, isActiveInvoice, isOverdueInvoice, isOutstandingInvoice, type CollectionInvoice } from "@/lib/collection";
 import { csvEscapeCell, csvNumber, monthKeySafe } from "@/lib/safe-metrics";
 import { derivePaymentMethodCurrencyCharts, type MonthlyPaymentMethodCurrencyTotal, type PaymentMethodCurrencyChart } from "@/lib/payment-method-currency-charts";
 import { deriveRevenueCurrencyCharts, type MonthlyRevenueCurrencyFact, type RevenueCurrencyChart } from "@/lib/revenue-currency-charts";
+import { deriveMomentumCurrencyIndicators, type MomentumCollectionCurrencyFact, type MomentumCurrencyIndicatorInput, type MomentumCurrencyIndicatorResult, type MomentumOutstandingCurrencyFact } from "@/lib/momentum-currency-indicators";
 import { deriveRevenueCurrencyKpis, type CollectedBilledCurrencyFact, type InvoiceCurrencyFact, type MonthlyRevenueCurrencyValue, type RevenueCurrencyKpiInput, type RevenueCurrencyKpiSummary } from "@/lib/revenue-currency-kpis";
 import type { InvoiceStatus } from "@/lib/types";
 import type { OCEventRow, OCInvoiceProof, OCInvoiceRow } from "@/lib/operations-center";
@@ -114,16 +115,8 @@ export type ReminderEffectiveness = {
   whatsappThenPaidWithin14d: number;
 };
 
-export type MomentumIndicators = {
-  paymentVelocityLabel: string;
-  paymentVelocityDetail: string | null;
-  collectionVelocityUsdLast30: number;
-  collectionVelocityUsdPrior30: number;
-  outstandingGrowthUsd: number;
-  overdueCountNow: number;
-  overdueCountPriorMonth: number;
-  repeatClientRate: number | null;
-};
+export type MomentumIndicators = MomentumCurrencyIndicatorResult;
+
 
 export type SmartRecommendation = { text: string; basis: string };
 
@@ -312,6 +305,71 @@ export function deriveRevenueCurrencyKpiFacts(input: {
   }
 
   return { reportingMonths: input.reportingMonths, monthlyValues, invoiceFacts, collectedBilledFacts };
+}
+
+/**
+ * Produces factual inputs for active momentum. The caller supplies already-scoped,
+ * non-quote workspace invoices; canonical collection predicates determine
+ * outstanding eligibility before the pure adapter aggregates by currency.
+ */
+export function deriveMomentumCurrencyFacts(input: {
+  invoices: readonly OCInvoiceRow[];
+  now: number;
+  today: string;
+}): MomentumCurrencyIndicatorInput {
+  const collectionFacts: MomentumCollectionCurrencyFact[] = [];
+  const outstandingFacts: MomentumOutstandingCurrencyFact[] = [];
+  const oneMonthAgo = new Date(input.now - 30 * MS_DAY).toISOString();
+  const recentDueStart = oneMonthAgo.slice(0, 10);
+  let overdueCountNow = 0;
+  let overdueCountPriorMonth = 0;
+
+  for (const invoice of input.invoices) {
+    const collectionInvoice = collectionInvoiceForRevenue(invoice);
+    if (isOverdueInvoice(collectionInvoice, input.today)) {
+      overdueCountNow += 1;
+      if (invoice.due_date && invoice.due_date >= recentDueStart) overdueCountPriorMonth += 1;
+    }
+
+    const currency = revenueCurrency(invoice);
+    if (!currency) continue;
+    const eligibleForOutstanding = isOutstandingInvoice(collectionInvoice);
+    const remaining = getOutstandingBalance(collectionInvoice).primaryBalance;
+    outstandingFacts.push({
+      currency,
+      currentAmount: remaining,
+      olderAmount: invoice.created_at && invoice.created_at < oneMonthAgo ? remaining : 0,
+      eligibleForOutstanding
+    });
+
+    for (const proof of invoice.payment_proofs || []) {
+      // Matches the active momentum acceptance source rule; proof void semantics are unchanged here.
+      if ((proof.status || "").toLowerCase() !== "accepted") continue;
+      const timestamp = new Date(proof.confirmed_at || proof.uploaded_at).getTime();
+      if (!Number.isFinite(timestamp)) continue;
+      const age = input.now - timestamp;
+      const period = age < 30 * MS_DAY ? "current_30d" : age >= 30 * MS_DAY && age < 60 * MS_DAY ? "previous_30d" : null;
+      if (!period) continue;
+      collectionFacts.push({ currency, period, amount: revenueAmount(invoice, proof, currency) });
+    }
+  }
+
+  const clientInvoiceCounts = input.invoices.reduce((counts, invoice) => {
+    if (!invoice.client_id) return counts;
+    counts.set(invoice.client_id, (counts.get(invoice.client_id) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const repeatClients = [...clientInvoiceCounts.values()].filter((count) => count >= 2).length;
+
+  return {
+    collectionFacts,
+    outstandingFacts,
+    shared: {
+      overdueCountNow,
+      overdueCountPriorMonth,
+      repeatClientRate: clientInvoiceCounts.size > 0 ? repeatClients / clientInvoiceCounts.size : null
+    }
+  };
 }
 export function buildIntelligenceBundle(input: {
   workspaceId: string;
@@ -503,88 +561,9 @@ export function buildIntelligenceBundle(input: {
     whatsappThenPaidWithin14d
   };
 
-  let c30 = 0;
-  let cPrev = 0;
-  let nLast30 = 0;
-  let nPrev30 = 0;
-  for (const inv of billable) {
-    for (const p of inv.payment_proofs || []) {
-      if ((p.status || "").toLowerCase() !== "accepted") continue;
-      const t = new Date(p.confirmed_at || p.uploaded_at).getTime();
-      if (!Number.isFinite(t)) continue;
-      const age = now - t;
-      if (age < 30 * MS_DAY) {
-        c30 += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-        nLast30 += 1;
-      } else if (age >= 30 * MS_DAY && age < 60 * MS_DAY) {
-        cPrev += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-        nPrev30 += 1;
-      }
-    }
-  }
-
-  const outstandingNow = billable.reduce((s, inv) => {
-    const ds = display(inv);
-    if (!["sent", "unpaid", "partial", "overdue"].includes(ds)) return s;
-    const bal = getRemainingBalance(inv as any, rowProofs(inv));
-    return s + toApproxUsd(inv, bal.primaryBalance);
-  }, 0);
-  const oneMonthAgo = new Date(now - 30 * MS_DAY).toISOString();
-  /** Proxy prior outstanding: invoices still open that were created before 30d ago */
-  const outstandingOlder = billable.reduce((s, inv) => {
-    if (!inv.created_at || inv.created_at >= oneMonthAgo) return s;
-    const ds = display(inv);
-    if (!["sent", "unpaid", "partial", "overdue"].includes(ds)) return s;
-    const bal = getRemainingBalance(inv as any, rowProofs(inv));
-    return s + toApproxUsd(inv, bal.primaryBalance);
-  }, 0);
-
-  const overdueNow = billable.filter((i) => display(i) === "overdue").length;
-  const overduePrior = billable.filter((i) => {
-    if (display(i) !== "overdue" || !i.due_date) return false;
-    return i.due_date < todayIso() && i.due_date >= new Date(now - 30 * MS_DAY).toISOString().slice(0, 10);
-  }).length;
-
-  const clientsWithInvoices = new Set(billable.map((i) => i.client_id).filter(Boolean));
-  const repeatClients = new Set(
-    billable.reduce((acc, inv) => {
-      if (!inv.client_id) return acc;
-      const c = inv.client_id;
-      if (!acc.has(c)) acc.set(c, 0);
-      acc.set(c, (acc.get(c) || 0) + 1);
-      return acc;
-    }, new Map<string, number>())
+  const momentum: MomentumIndicators = deriveMomentumCurrencyIndicators(
+    deriveMomentumCurrencyFacts({ invoices: billable, now, today: todayIso() })
   );
-  let repeat = 0;
-  for (const [, n] of repeatClients) if (n >= 2) repeat += 1;
-  const repeatClientRate =
-    clientsWithInvoices.size > 0 ? repeat / clientsWithInvoices.size : null;
-
-  let paymentVelocityLabel = "Payment velocity";
-  let paymentVelocityDetail: string | null = null;
-  if (nLast30 + nPrev30 >= 4) {
-    if (c30 > cPrev * 1.1) {
-      paymentVelocityLabel = "Collections picked up";
-      paymentVelocityDetail = `~${money(c30, "USD")} recorded on accepted proofs in the last 30 days vs ~${money(cPrev, "USD")} in the prior 30 days (approx. USD equivalent at invoice rates).`;
-    } else if (c30 < cPrev * 0.9 && cPrev > 0) {
-      paymentVelocityLabel = "Collections slowed";
-      paymentVelocityDetail = `Accepted-proof volume (approx. USD equivalent) was lower in the last 30 days than the prior window.`;
-    } else {
-      paymentVelocityLabel = "Steady payment pace";
-      paymentVelocityDetail = `Accepted-proof volume is similar across the last two 30-day windows (approx. USD equivalent).`;
-    }
-  }
-
-  const momentum: MomentumIndicators = {
-    paymentVelocityLabel,
-    paymentVelocityDetail,
-    collectionVelocityUsdLast30: c30,
-    collectionVelocityUsdPrior30: cPrev,
-    outstandingGrowthUsd: outstandingNow - outstandingOlder,
-    overdueCountNow: overdueNow,
-    overdueCountPriorMonth: overduePrior,
-    repeatClientRate
-  };
 
   const recommendations: SmartRecommendation[] = [];
 

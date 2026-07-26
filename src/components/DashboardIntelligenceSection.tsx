@@ -2,22 +2,24 @@
 
 import Link from "next/link";
 import { BarChart3, Filter, Lightbulb, TrendingDown, TrendingUp, Minus } from "lucide-react";
-import { money } from "@/lib/format";
 import { formatCurrencyTotal } from "@/lib/currency-totals";
 import type { IntelligenceBundle } from "@/lib/intelligence-layer";
 import type { RevenueCurrencyKpiSummary } from "@/lib/revenue-currency-kpis";
-import { finiteN, safeDays, safeDaysFromHours, safeHours, safePercent } from "@/lib/safe-metrics";
+import type { MomentumCurrencyIndicators, MomentumSharedIndicators } from "@/lib/momentum-currency-indicators";
+import { safeDays, safeDaysFromHours, safeHours, safePercent } from "@/lib/safe-metrics";
 import { IntelligenceRevenueTrendChart } from "@/components/IntelligenceRevenueTrendChart";
 import { IntelligenceStackedMethodsChart } from "@/components/IntelligenceStackedMethodsChart";
 
-function TrendIcon({ direction }: { direction: RevenueCurrencyKpiSummary["revenueTrend"]["direction"] }) {
+type TrendDirection = RevenueCurrencyKpiSummary["revenueTrend"]["direction"] | MomentumCurrencyIndicators["velocity"]["direction"];
+
+function TrendIcon({ direction }: { direction: TrendDirection }) {
   if (direction === "up") return <TrendingUp className="h-4 w-4 text-emerald-600" aria-hidden />;
   if (direction === "down") return <TrendingDown className="h-4 w-4 text-red-600" aria-hidden />;
   if (direction === "flat") return <Minus className="h-4 w-4 text-slate-500" aria-hidden />;
   return <BarChart3 className="h-4 w-4 text-slate-400" aria-hidden />;
 }
 
-function trendLabel(direction: RevenueCurrencyKpiSummary["revenueTrend"]["direction"]) {
+function trendLabel(direction: TrendDirection) {
   if (direction === "unavailable") return "Unavailable";
   return direction.charAt(0).toUpperCase() + direction.slice(1);
 }
@@ -100,6 +102,62 @@ export function RevenueCurrencyKpiGroups({ summaries }: { summaries: readonly Re
   return <div className="space-y-3">{orderedSummaries.map((summary) => <RevenueCurrencyKpiGroup key={summary.currency} summary={summary} />)}</div>;
 }
 
+function MomentumCurrencyIndicatorGroup({ indicator }: { indicator: MomentumCurrencyIndicators }) {
+  const { currency, velocity, outstandingGrowth } = indicator;
+  const headingId = `momentum-${currency}`;
+
+  return (
+    <section aria-labelledby={headingId} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <h4 id={headingId} className="text-xs font-bold text-ink">Momentum — {currency}</h4>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="min-w-0 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Collection velocity</p>
+            <TrendIcon direction={velocity.direction} />
+          </div>
+          <p className="mt-1 text-sm font-semibold text-ink">{trendLabel(velocity.direction)}</p>
+          {velocity.percentageChange !== null ? <p className="mt-1 text-[11px] text-slate-600">{safePercent(velocity.percentageChange)} change</p> : null}
+          {velocity.direction === "unavailable" ? <p className="mt-1 text-[11px] text-slate-500">At least four accepted proofs are needed.</p> : null}
+        </div>
+        <div className="min-w-0 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Collected last 30d</p>
+          <p className="mt-1 break-words text-sm font-bold text-ink">{currencyAmount(currency, velocity.currentAmount)}</p>
+        </div>
+        <div className="min-w-0 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Prior 30d</p>
+          <p className="mt-1 break-words text-sm font-bold text-ink">{currencyAmount(currency, velocity.previousAmount)}</p>
+        </div>
+        <div className="min-w-0 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Outstanding growth</p>
+          <p className="mt-1 break-words text-sm font-bold text-ink">{currencyAmount(currency, outstandingGrowth)}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function MomentumCurrencyIndicatorGroups({ indicators }: { indicators: readonly MomentumCurrencyIndicators[] }) {
+  if (!indicators.length) {
+    return <p className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600" role="status">Monetary momentum is unavailable for the available facts.</p>;
+  }
+
+  const orderedIndicators = [...indicators].sort((a, b) => a.currency.localeCompare(b.currency));
+  return <div className="mt-3 space-y-3">{orderedIndicators.map((indicator) => <MomentumCurrencyIndicatorGroup key={indicator.currency} indicator={indicator} />)}</div>;
+}
+export function MomentumSharedMetrics({ shared }: { shared: MomentumSharedIndicators }) {
+  return (
+    <dl className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs">
+      <div className="flex justify-between gap-2">
+        <dt className="text-slate-600">Overdue now · due in last 30d</dt>
+        <dd className="font-bold">{shared.overdueCountNow} · {shared.overdueCountPriorMonth}</dd>
+      </div>
+      <div className="flex justify-between gap-2">
+        <dt className="text-slate-600">Repeat client rate</dt>
+        <dd className="font-bold">{safePercent(shared.repeatClientRate)}</dd>
+      </div>
+    </dl>
+  );
+}
 export function DashboardIntelligenceSection({ bundle }: { bundle: IntelligenceBundle }) {
   const { revenue, paymentMethods, invoicePerformance, reminders, momentum, recommendations } = bundle;
   const trustedPick = [...paymentMethods]
@@ -272,34 +330,9 @@ export function DashboardIntelligenceSection({ bundle }: { bundle: IntelligenceB
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
           <h3 className="text-sm font-bold text-ink">Momentum</h3>
-          <p className="mt-1 text-xs font-semibold text-ink">{momentum.paymentVelocityLabel}</p>
-          {momentum.paymentVelocityDetail ? <p className="mt-1 text-xs text-slate-600">{momentum.paymentVelocityDetail}</p> : null}
-          <dl className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs">
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-600">Collected last 30d (approx. USD)</dt>
-              <dd className="font-bold">{money(finiteN(momentum.collectionVelocityUsdLast30), "USD")}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-600">Prior 30d</dt>
-              <dd className="font-bold">{money(finiteN(momentum.collectionVelocityUsdPrior30), "USD")}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-600">Outstanding delta (proxy)</dt>
-              <dd className="font-bold">{money(finiteN(momentum.outstandingGrowthUsd), "USD")}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-600">Overdue now · due in last 30d</dt>
-              <dd className="font-bold">
-                {momentum.overdueCountNow} · {momentum.overdueCountPriorMonth}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-600">Repeat client rate</dt>
-              <dd className="font-bold">
-                {safePercent(momentum.repeatClientRate)}
-              </dd>
-            </div>
-          </dl>
+          <MomentumCurrencyIndicatorGroups indicators={momentum.currencyIndicators} />
+          <MomentumSharedMetrics shared={momentum.shared} />
+
         </div>
       </div>
 
