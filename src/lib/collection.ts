@@ -62,3 +62,16 @@ export function collectionTotals(invoices: CollectionInvoice[]) {
   }
   return { outstanding, overdue };
 }
+
+
+/** Canonical financial predicates: quotes, drafts and rejected/voided records never contribute to operational balances. */
+export function isQuote(invoice: CollectionInvoice) { return isQuoteDocument(invoice); }
+export function isVoidedInvoice(invoice: CollectionInvoice) { return invoice.status === "rejected"; }
+export function isCancelledInvoice(invoice: CollectionInvoice) { return invoice.status === "rejected"; }
+export function isActiveInvoice(invoice: CollectionInvoice) { return !isQuote(invoice) && !["draft", "rejected"].includes(invoice.status); }
+export function isPaidInvoice(invoice: CollectionInvoice) { return isActiveInvoice(invoice) && collectionStatus(invoice) === "paid"; }
+export function isPartiallyPaidInvoice(invoice: CollectionInvoice) { return isActiveInvoice(invoice) && collectionStatus(invoice) === "partial" && remainingForInvoice(invoice).primaryBalance > 0; }
+export function isUnpaidInvoice(invoice: CollectionInvoice) { return isActiveInvoice(invoice) && ["sent", "unpaid"].includes(collectionStatus(invoice)) && remainingForInvoice(invoice).primaryBalance > 0; }
+export function getOutstandingBalance(invoice: CollectionInvoice) { return isOutstandingInvoice(invoice) ? remainingForInvoice(invoice) : { ...remainingForInvoice(invoice), primaryBalance: 0, usd: 0, lbp: 0 }; }
+export function isAcceptedNonVoidedPayment(payment: MinimalProof) { return payment.status === "accepted" && !payment.voided_at; }
+export function isDueWithinSevenDays(invoice: CollectionInvoice, today: string, sevenDays: string) { return isOutstandingInvoice(invoice) && Boolean(invoice.due_date) && invoice.due_date! >= today && invoice.due_date! <= sevenDays; }

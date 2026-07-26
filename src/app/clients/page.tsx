@@ -8,6 +8,8 @@ import { isQuoteDocument } from "@/lib/documents";
 import { getClientHealth, type ClientHealth } from "@/lib/operations";
 import { getDisplayInvoiceStatus, getRemainingBalance } from "@/lib/status";
 import { requireUser } from "@/lib/supabase/server";
+import { getWorkspaceContext } from "@/lib/get-workspace";
+import { isActiveInvoice, isOutstandingInvoice, isOverdueInvoice, isPaidInvoice, isPartiallyPaidInvoice, isUnpaidInvoice, remainingForInvoice } from "@/lib/collection";
 
 type ClientBalanceTotals = {
   billed: number;
@@ -18,7 +20,7 @@ type ClientBalanceTotals = {
 
 function toClientListItem(client: any): ClientContactsTableItem {
   const invoices = client.invoices || [];
-  const billableInvoices = invoices.filter((inv: any) => !isQuoteDocument(inv));
+  const billableInvoices = invoices.filter((inv: any) => isActiveInvoice(inv));
   const invoiceSummary = { paid: 0, partial: 0, unpaid: 0 };
 
   const totalsByCurrency = billableInvoices.reduce((acc: Record<string, ClientBalanceTotals>, inv: any) => {
@@ -26,11 +28,11 @@ function toClientListItem(client: any): ClientContactsTableItem {
     const balance = getRemainingBalance(inv, inv.payment_proofs || []);
     const curr = balance.primaryCurrency;
 
-    if (displayStatus === "paid") {
+    if (isPaidInvoice(inv)) {
       invoiceSummary.paid += 1;
-    } else if (displayStatus === "partial") {
+    } else if (isPartiallyPaidInvoice(inv)) {
       invoiceSummary.partial += 1;
-    } else if (["draft", "sent", "unpaid", "overdue"].includes(displayStatus)) {
+    } else if (isUnpaidInvoice(inv) || isOverdueInvoice(inv)) {
       invoiceSummary.unpaid += 1;
     }
 
@@ -77,11 +79,12 @@ function toClientListItem(client: any): ClientContactsTableItem {
 }
 
 export default async function ClientsPage() {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
+  const ctx = await getWorkspaceContext();
   const { data: clients } = await supabase
     .from("clients")
-    .select("*, invoices(*, payment_proofs(status, amount_usd, amount_lbp))")
-    .eq("user_id", user.id)
+    .select("*, invoices!inner(*, payment_proofs(status, amount_usd, amount_lbp, voided_at))")
+    .eq("workspace_id", ctx.workspaceId)
     .order("created_at", { ascending: false });
 
   const clientRows = (clients || []).map(toClientListItem);
