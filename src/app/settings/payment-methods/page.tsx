@@ -1,7 +1,8 @@
 import { AppShell } from "@/components/AppShell";
 import { OperationsChecklist } from "@/components/OperationsChecklist";
 import { PaymentMethodsManager } from "@/components/PaymentMethodsManager";
-import { SettingsPageHeader } from "@/components/SettingsPageHeader";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { evaluatePaymentReadiness } from "@/lib/operations";
 import { requireUser } from "@/lib/supabase/server";
@@ -25,10 +26,11 @@ export default async function PaymentMethodsPage() {
 
   return (
     <AppShell>
-      <SettingsPageHeader
+      <PageContainer width="default">
+      <PageHeader
         title="Payment methods"
-        subtitle="Manage how clients can pay you on public invoice pages."
-        action={<a className="btn btn-primary" href="#payment-methods">Manage methods</a>}
+        description="Manage how clients can pay you on public invoice pages."
+        actions={<a className="btn btn-primary" href="#payment-methods">Manage methods</a>}
       />
       <div className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
@@ -80,6 +82,7 @@ export default async function PaymentMethodsPage() {
       <div id="payment-methods">
         <PaymentMethodsManager methods={methods || []} />
       </div>
+      </PageContainer>
     </AppShell>
   );
 }

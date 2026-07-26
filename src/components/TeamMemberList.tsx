@@ -67,15 +67,15 @@ export function TeamMemberList({
         return (
           <div
             key={member.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/50 bg-white/80 px-4 py-3 transition-[border-color] duration-q hover:border-slate-200/80"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/50 bg-white/80 px-4 py-3 transition-[border-color] duration-q hover:border-slate-200/80"
             style={{ boxShadow: "var(--q-shadow-xs)" }}
           >
-            <div className="flex items-center gap-3 overflow-hidden">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-400">
                 <UserCircle className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-ink">
+                <p className="break-words text-sm font-medium text-ink">
                   {member.fullName}
                   {isCurrentUser ? (
                     <span className="ml-1.5 text-xs text-slate-400">(you)</span>

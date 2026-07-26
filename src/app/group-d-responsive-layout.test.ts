@@ -1,0 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+const source=(p:string)=>readFileSync(resolve(process.cwd(),p),"utf8");
+describe("Group D responsive shells",()=>{it("uses responsive primitives on reports, team, and settings",()=>{expect(source("src/app/reports/page.tsx")).toContain("<PageContainer");expect(source("src/app/reports/page.tsx")).toContain("<PageHeader");expect(source("src/app/team/page.tsx")).toContain("<PageContainer");expect(source("src/app/team/page.tsx")).toContain("<PageHeader");for(const p of ["profile","payment-methods","service-presets","billing"]) { const s=source(`src/app/settings/${p}/page.tsx`);expect(s).toContain("<PageContainer");expect(s).toContain("<PageHeader");}});it("preserves team protections and mobile-safe member details",()=>{const s=source("src/components/TeamMemberList.tsx");expect(s).toContain("!isOwner");expect(s).toContain("canManage");expect(s).toContain("break-words");});});

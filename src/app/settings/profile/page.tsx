@@ -3,7 +3,8 @@ import { updateProfileAction } from "@/app/actions";
 import { OperationsChecklist } from "@/components/OperationsChecklist";
 import { ProfileLogoForm } from "@/components/ProfileLogoForm";
 import { ProfilePreviewCard } from "@/components/ProfilePreviewCard";
-import { SettingsPageHeader } from "@/components/SettingsPageHeader";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DOCUMENT_THEMES, normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
 import { evaluateProfileCompleteness } from "@/lib/operations";
@@ -34,9 +35,10 @@ export default async function ProfileSettingsPage() {
 
   return (
     <AppShell>
-      <SettingsPageHeader
+      <PageContainer width="default">
+      <PageHeader
         title="Business profile"
-        subtitle="Logo, colors, and contact details clients see on payment pages, receipts, portals, and printable invoices."
+        description="Logo, colors, and contact details clients see on payment pages, receipts, portals, and printable invoices."
       />
 
       <div className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
@@ -333,6 +335,7 @@ export default async function ProfileSettingsPage() {
           />
         </div>
       </div>
+      </PageContainer>
     </AppShell>
   );
 }

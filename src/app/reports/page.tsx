@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Download, Share2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { PremiumEmptyState } from "@/components/PremiumEmptyState";
 import { requireUser } from "@/lib/supabase/server";
 import { buildIntelligenceBundle } from "@/lib/intelligence-layer";
@@ -33,18 +35,13 @@ export default async function ReportsPage() {
 
   return (
     <AppShell>
-      <div className="mb-7 rounded-2xl border border-slate-200/55 bg-white/[0.65] p-5 shadow-card backdrop-blur sm:p-6">
-        <p className="q-section-label mb-1.5 text-slate-500">Workspace</p>
-        <h1 className="page-title">Monthly reports</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Internal summaries from your workspace. Download CSV per month or create a read-only report link from the export center.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
+      <PageContainer width="wide">
+      <PageHeader eyebrow="Workspace" title="Monthly reports" description="Internal summaries from your workspace. Download CSV per month or create a read-only report link from the export center." actions={<Link href="/export#shared-reports" className="btn btn-secondary text-xs"><Share2 className="h-4 w-4" aria-hidden />Create share link</Link>} />
+      <div className="mb-7 flex flex-wrap gap-2">
           <Link href="/export#shared-reports" className="btn btn-secondary text-xs">
             <Share2 className="h-4 w-4" aria-hidden />
             Create share link
           </Link>
-        </div>
       </div>
 
       <div className="q-table-shell overflow-x-auto">
@@ -101,6 +98,7 @@ export default async function ReportsPage() {
           Back to connectivity
         </Link>
       </p>
+      </PageContainer>
     </AppShell>
   );
 }

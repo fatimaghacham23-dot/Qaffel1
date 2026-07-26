@@ -5,6 +5,9 @@ import { ROLE_LABELS, ROLE_DESCRIPTIONS, ASSIGNABLE_ROLES } from "@/lib/permissi
 import { redirect } from "next/navigation";
 import { TeamMemberList } from "@/components/TeamMemberList";
 import { InviteTeammateForm } from "@/components/InviteTeammateForm";
+import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export default async function TeamPage() {
   const { supabase } = await requireUser();
@@ -35,15 +38,7 @@ export default async function TeamPage() {
     : { data: [] };
 
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="q-elevated bg-white/[0.72] p-6 backdrop-blur-md sm:p-7">
-        <p className="q-section-label mb-2 text-cedar">Workspace</p>
-        <h1 className="page-title">Team</h1>
-        <p className="q-subtitle mt-2.5 max-w-2xl">
-          Manage your workspace team. Invite teammates, assign roles, and control access to your operational data.
-        </p>
-      </div>
+    <AppShell role={ctx.role}><PageContainer width="wide" className="space-y-8 py-2"><PageHeader eyebrow="Workspace" title="Team" description="Manage your workspace team. Invite teammates, assign roles, and control access to your operational data." />
 
       {/* Team members */}
       <section>
@@ -83,7 +78,7 @@ export default async function TeamPage() {
             {invitations.map((inv) => (
               <div
                 key={inv.id}
-                className="flex items-center justify-between rounded-xl border border-slate-200/50 bg-white/80 px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/50 bg-white/80 px-4 py-3"
                 style={{ boxShadow: "var(--q-shadow-xs)" }}
               >
                 <div>
@@ -126,6 +121,6 @@ export default async function TeamPage() {
           ))}
         </div>
       </section>
-    </main>
+    </PageContainer></AppShell>
   );
 }

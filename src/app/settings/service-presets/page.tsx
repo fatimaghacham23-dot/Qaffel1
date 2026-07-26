@@ -1,7 +1,8 @@
 import { AppShell } from "@/components/AppShell";
 import { createServicePresetAction } from "@/app/actions";
 import { PremiumStatCard } from "@/components/PremiumStatCard";
-import { SettingsPageHeader } from "@/components/SettingsPageHeader";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { ServicePresetItem } from "@/components/ServicePresetItem";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/supabase/server";
@@ -18,10 +19,11 @@ export default async function ServicePresetsPage() {
 
   return (
     <AppShell>
-      <SettingsPageHeader
+      <PageContainer width="default">
+      <PageHeader
         title="Service presets"
-        subtitle="Create reusable invoice templates for services you invoice frequently."
-        action={<a className="btn btn-primary" href="#new-preset">New preset</a>}
+        description="Create reusable invoice templates for services you invoice frequently."
+        actions={<a className="btn btn-primary" href="#new-preset">New preset</a>}
       />
 
       <div className="mb-6 rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
@@ -121,6 +123,7 @@ export default async function ServicePresetsPage() {
           </div>
         </aside>
       </div>
+      </PageContainer>
     </AppShell>
   );
 }
