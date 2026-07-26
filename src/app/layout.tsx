@@ -7,6 +7,10 @@ import "./globals.css";
 import { CommandCenter } from "@/components/CommandCenter";
 import { createClient } from "@/lib/supabase/server";
 import { getCanonicalAppUrl } from "@/lib/urls";
+import { NotificationBell } from "@/components/NotificationBell";
+import { getWorkspaceContext } from "@/lib/get-workspace";
+import { getWorkspaceNotifications } from "@/lib/notifications-server";
+import { notificationPreview } from "@/lib/notifications";
 
 export const metadata: Metadata = {
   title: "Qaffel",
@@ -25,6 +29,8 @@ export default async function RootLayout({
   const {
     data: { user }
   } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+
+  const notificationData = user ? await (async () => { try { const context = await getWorkspaceContext(); return notificationPreview(await getWorkspaceNotifications(supabase, context)); } catch { return notificationPreview([]); } })() : null;
 
   return (
     <html lang={publicLang} dir={publicLang === "ar" ? "rtl" : "ltr"}>
@@ -50,6 +56,7 @@ export default async function RootLayout({
               Qaffel
             </Link>
             <nav className="flex items-center gap-1 text-sm">
+              {notificationData ? <NotificationBell items={notificationData.items} actionCount={notificationData.actionCount} /> : null}
               <Link className="rounded-xl px-3.5 py-2 font-semibold text-slate-600 transition-[background-color,color] duration-q hover:bg-slate-100/70 hover:text-ink" href="/dashboard">
                 Dashboard
               </Link>

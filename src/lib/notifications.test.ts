@@ -4,7 +4,8 @@ import {
   buildDerivedNotifications,
   deriveNotifications,
   filterNotifications,
-  notificationFilter
+  notificationFilter,
+  notificationPreview
 } from "@/lib/notifications";
 
 const now = new Date("2026-07-26T12:00:00.000Z");
@@ -35,6 +36,13 @@ describe("derived notifications", () => {
     expect(incomplete.some((item) => item.id === "onboarding:business-profile")).toBe(true);
     expect(incomplete.some((item) => item.id === "onboarding:payment-method")).toBe(true);
     expect(complete.some((item) => item.category === "onboarding")).toBe(false);
+  });
+
+  it("limits the bell preview to five actionable items", () => {
+    const items = Array.from({ length: 7 }, (_, index) => ({ id: "action:" + index, category: "payments" as const, severity: "warning" as const, title: "Action", description: "Needs work", reason: "Test", destinationUrl: "/payments", permittedRoles: ["owner" as const] }));
+    const preview = notificationPreview(items);
+    expect(preview.actionCount).toBe(7);
+    expect(preview.actionItems).toHaveLength(5);
   });
 
   it("uses collection semantics for overdue and partial balances without exposing private values", () => {

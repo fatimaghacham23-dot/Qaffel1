@@ -65,3 +65,15 @@ export function filterNotifications(items: DerivedNotification[], filter: Notifi
 export function notificationFilter(value: string | undefined): NotificationFilter {
   return value === "action" || value === "onboarding" || value === "payments" || value === "team" || value === "system" ? value : "all";
 }
+
+
+export type NotificationPreview = {
+  items: DerivedNotification[];
+  actionCount: number;
+  actionItems: DerivedNotification[];
+};
+
+export function notificationPreview(items: DerivedNotification[]): NotificationPreview {
+  const actionItems = items.filter((item) => item.severity !== "info");
+  return { items, actionCount: actionItems.length, actionItems: actionItems.slice(0, 5) };
+}

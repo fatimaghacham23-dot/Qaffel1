@@ -7,7 +7,7 @@ import {
   DASHBOARD_INVOICE_LIMIT,
   DASHBOARD_PROOF_LIMIT,
   dashboardActivity,
-  dashboardAttention,
+
   dashboardCapabilities,
   dashboardGreeting,
   dashboardMetrics,
@@ -22,6 +22,8 @@ import { isOutstandingInvoice, remainingForInvoice } from "@/lib/collection";
 import { money } from "@/lib/format";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { dashboardScope } from "@/lib/dashboard-scope";
+import { notificationPreview } from "@/lib/notifications";
+import { getWorkspaceNotifications } from "@/lib/notifications-server";
 import { requireUser } from "@/lib/supabase/server";
 
 type Result<T> = { data: T[] | null; error: { message?: string } | null; count?: number | null };
@@ -177,7 +179,7 @@ export default async function DashboardPage() {
   const pending = pendingResult.data || [];
   const payments = [...pending, ...(acceptedResult.data || []), ...(rejectedResult.data || [])];
   const metrics = dashboardMetrics({ invoices, payments: acceptedResult.data || [], now });
-  const attention = dashboardAttention({ invoices, payments: [...pending, ...(rejectedResult.data || [])], assignments: assignmentResult.data || [], capabilities, now });
+  const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx)).actionItems;
   const activity = dashboardActivity(eventResult.data || []);
   const onboarding = dashboardOnboarding({ role: ctx.role, clientCount: clientCountResult.count || 0, invoiceCount: invoiceCountResult.count || 0, sharedInvoice: (shareCountResult.count || 0) > 0 });
   const cashFlow = cashFlowPreview({ invoices, payments: acceptedResult.data || [], now });
