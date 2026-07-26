@@ -314,6 +314,24 @@ export function dashboardOnboarding(input: { role: WorkspaceRole; evidence: Onbo
   ];
   return steps.every((step) => step.complete) ? null : steps;
 }
+
+export type DashboardOnboardingAction = { id: string; title: string; href: string; label: string };
+export type DashboardOnboardingState = { primaryAction: DashboardOnboardingAction; setupItems: DashboardOnboardingAction[]; showNewWorkspaceState: boolean; notificationDestination: "/notifications" };
+export function deriveDashboardOnboardingState(input: { onboardingEvidence: OnboardingEvidence; role: WorkspaceRole; operationalAttention?: DashboardOnboardingAction[] }): DashboardOnboardingState {
+  const e = input.onboardingEvidence;
+  const can = (permission: Parameters<typeof hasPermission>[1]) => hasPermission(input.role, permission);
+  const candidates: DashboardOnboardingAction[] = [];
+  if (!e.hasCompleteBusinessIdentity && can("settings.manage")) candidates.push({ id: e.missingBusinessIdentityFields.includes("business_name") ? "setup:business-profile" : "setup:support-contact", title: e.missingBusinessIdentityFields.includes("business_name") ? "Complete your business profile" : "Add support contact details", href: "/settings/profile", label: "Edit profile" });
+  if (!e.hasClient && can("clients.create")) candidates.push({ id: "setup:first-client", title: "Create your first client", href: "/clients/new", label: "Add client" });
+  if (!e.hasInvoice && can("invoices.create")) candidates.push({ id: "setup:first-invoice", title: "Create your first invoice", href: "/invoices/new", label: "Create invoice" });
+  if (!e.hasActivePaymentMethod && can("settings.manage")) candidates.push({ id: "setup:payment-method", title: "Add a payment method", href: "/settings/payment-methods", label: "Add payment method" });
+  if (e.hasInvoice && !e.hasSharedPaymentRequest && can("invoices.send")) candidates.push({ id: "setup:share-payment-request", title: "Share your first payment request", href: "/invoices", label: "Open invoices" });
+  if (e.requiresTeamSetup && can("team.manage")) candidates.push({ id: "setup:team", title: "Set up your team", href: "/team", label: "Open team" });
+  if (e.requiresBillingSetup && can("billing.manage")) candidates.push({ id: "setup:billing", title: "Complete billing setup", href: "/settings/billing", label: "Open billing" });
+  const unique = [...new Map(candidates.map((item) => [`${item.title}:${item.href}`, item])).values()].slice(0, 5);
+  const primaryAction = unique[0] || input.operationalAttention?.[0] || { id: "fallback:invoices", title: "Open invoices", href: "/invoices", label: "Open invoices" };
+  return { primaryAction, setupItems: unique.filter((item) => item.id !== primaryAction.id), showNewWorkspaceState: !e.hasClient && !e.hasInvoice, notificationDestination: "/notifications" };
+}
 export function dashboardGreeting(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
