@@ -1,6 +1,6 @@
 import { formatPaymentMethod, money, shortDate } from "@/lib/format";
 import { buildSharedReportUrl, getCanonicalAppUrl } from "@/lib/urls";
-import { buildIntelligenceBundle } from "@/lib/intelligence-layer";
+import { buildWorkspaceMonthlyReports, type WorkspaceReportInvoice } from "@/lib/workspace-monthly-report";
 import type { OCEventRow, OCInvoiceRow } from "@/lib/operations-center";
 import { parsePaymentPlan } from "@/lib/payment-plan";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
@@ -289,26 +289,19 @@ export function buildConnectivityModel(input: {
     "Receipt note": row.Note
   }));
 
-  const intelligence = buildIntelligenceBundle({
-    invoices,
-    events,
-    clients: input.clients.map((client) => ({
-      id: text(client.id),
-      name: text(client.name) || null,
-      created_at: text(client.created_at)
-    }))
-  });
-
-  const intelligenceRows: CsvRow[] = intelligence.monthlyReports.map((row) => ({
+  const intelligenceRows: CsvRow[] = buildWorkspaceMonthlyReports({
+    invoices: invoices as WorkspaceReportInvoice[],
+    clients: input.clients.map((client) => ({ created_at: text(client.created_at) }))
+  }).map((row) => ({
     Month: row.monthLabel,
+    Currency: row.currency,
+    Metric: "collection_summary",
     "Invoices created": row.invoicesCreated,
-    "Collected approx USD": row.paidTotalUsd.toFixed(2),
-    "Overdue approx USD": row.overdueTotalUsd.toFixed(2),
+    Amount: row.collected,
+    "Overdue amount": row.overdue,
     "New clients": row.newClients,
-    "Top payment method": row.topMethod || "",
-    "Operational issues": row.operationalIssues
+    "Top payment method": row.topMethod || ""
   }));
-
   let collectedUsd = 0;
   let collectedLbp = 0;
   let openUsd = 0;
