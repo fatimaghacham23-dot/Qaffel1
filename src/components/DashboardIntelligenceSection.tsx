@@ -89,7 +89,7 @@ export function DashboardIntelligenceSection({ bundle }: { bundle: IntelligenceB
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <IntelligenceRevenueTrendChart revenue={revenue} />
+        <IntelligenceRevenueTrendChart charts={revenue.currencyCharts} />
         <IntelligenceStackedMethodsChart data={bundle.paymentMethodCurrencyCharts} />
       </div>
 

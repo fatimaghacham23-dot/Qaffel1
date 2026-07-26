@@ -6,9 +6,10 @@
 import { documentStatus, isQuoteDocument } from "@/lib/documents";
 import { formatPaymentMethod, money, todayIso } from "@/lib/format";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
-import { isAcceptedNonVoidedPayment } from "@/lib/collection";
+import { getOutstandingBalance, isAcceptedNonVoidedPayment, isActiveInvoice, isOutstandingInvoice, type CollectionInvoice } from "@/lib/collection";
 import { csvEscapeCell, csvNumber, monthKeySafe } from "@/lib/safe-metrics";
 import { derivePaymentMethodCurrencyCharts, type MonthlyPaymentMethodCurrencyTotal, type PaymentMethodCurrencyChart } from "@/lib/payment-method-currency-charts";
+import { deriveRevenueCurrencyCharts, type MonthlyRevenueCurrencyFact, type RevenueCurrencyChart } from "@/lib/revenue-currency-charts";
 import type { InvoiceStatus } from "@/lib/types";
 import type { OCEventRow, OCInvoiceProof, OCInvoiceRow } from "@/lib/operations-center";
 
@@ -85,10 +86,8 @@ export type RevenueIntelligence = {
   revenueTrend: "up" | "down" | "flat" | "insufficient_data";
   collectedVsBilledRatio: number | null;
   depositConversionRate: number | null;
-  /** USD-equivalent for charting: USD invoices + LBP converted at invoice rate */
-  collectedByMonth: { key: string; label: string; usd: number }[];
-  billedByMonth: { key: string; label: string; usd: number }[];
-  overdueByMonth: { key: string; label: string; usd: number }[];
+  /** Currency-safe chart contracts. Legacy USD-equivalent KPI fields above remain temporary. */
+  currencyCharts: RevenueCurrencyChart[];
 };
 
 export type MethodBehaviorRow = {
@@ -202,6 +201,84 @@ function invoiceTitle(inv: OCInvoiceRow) {
   return inv.invoice_number ? `${inv.invoice_number} · ${inv.title}` : inv.title;
 }
 
+function collectionInvoiceForRevenue(invoice: OCInvoiceRow): CollectionInvoice {
+  return {
+    id: invoice.id,
+    status: invoice.status,
+    document_type: invoice.document_type,
+    currency: invoice.currency,
+    amount_usd: num(invoice.amount_usd),
+    amount_lbp: num(invoice.amount_lbp),
+    due_date: invoice.due_date,
+    created_at: invoice.created_at,
+    payment_proofs: (invoice.payment_proofs || []).map((proof) => ({
+      status: proof.status || "",
+      amount_usd: proof.amount_usd === null || proof.amount_usd === undefined ? null : Number(proof.amount_usd),
+      amount_lbp: proof.amount_lbp === null || proof.amount_lbp === undefined ? null : Number(proof.amount_lbp),
+      voided_at: proof.voided_at || null
+    }))
+  };
+}
+
+function revenueCurrency(invoice: OCInvoiceRow): "USD" | "LBP" | null {
+  const currency = String(invoice.currency || "").trim().toUpperCase();
+  return currency === "USD" || currency === "LBP" ? currency : null;
+}
+
+function revenueAmount(invoice: OCInvoiceRow, proof: OCInvoiceProof | null, currency: "USD" | "LBP") {
+  if (proof) return currency === "USD" ? num(proof.amount_usd) : num(proof.amount_lbp);
+  return currency === "USD" ? num(invoice.amount_usd) : num(invoice.amount_lbp);
+}
+
+/**
+ * Produces only factual revenue facts for the supplied, already-authorized
+ * workspace invoices. The pure chart adapter owns aggregation and zero filling.
+ */
+export function deriveRevenueCurrencyFacts(input: {
+  invoices: readonly OCInvoiceRow[];
+  reportingMonths: readonly string[];
+}): MonthlyRevenueCurrencyFact[] {
+  const reportingMonthSet = new Set(input.reportingMonths);
+  const facts: MonthlyRevenueCurrencyFact[] = [];
+  const today = todayIso();
+
+  for (const invoice of input.invoices) {
+    const currency = revenueCurrency(invoice);
+    const collectionInvoice = collectionInvoiceForRevenue(invoice);
+    if (!currency || !isActiveInvoice(collectionInvoice)) continue;
+
+    const createdMonth = monthKeySafe(invoice.created_at);
+    if (createdMonth && reportingMonthSet.has(createdMonth)) {
+      facts.push({ month: createdMonth, currency, metric: "billed", amount: revenueAmount(invoice, null, currency) });
+    }
+
+    if (isOutstandingInvoice(collectionInvoice) && invoice.due_date && invoice.due_date < today) {
+      const dueMonth = monthKeySafe(invoice.due_date) ?? monthKeySafe(`${invoice.due_date}T12:00:00`);
+      if (dueMonth && reportingMonthSet.has(dueMonth)) {
+        facts.push({
+          month: dueMonth,
+          currency,
+          metric: "overdue",
+          amount: getOutstandingBalance(collectionInvoice).primaryBalance
+        });
+      }
+    }
+
+    for (const proof of invoice.payment_proofs || []) {
+      if (!isAcceptedNonVoidedPayment(proof)) continue;
+      const confirmedMonth = monthKeySafe(proof.confirmed_at || proof.uploaded_at);
+      if (!confirmedMonth || !reportingMonthSet.has(confirmedMonth)) continue;
+      facts.push({
+        month: confirmedMonth,
+        currency,
+        metric: "collected",
+        amount: revenueAmount(invoice, proof, currency)
+      });
+    }
+  }
+
+  return facts;
+}
 export function buildIntelligenceBundle(input: {
   workspaceId: string;
   invoices: OCInvoiceRow[];
@@ -257,6 +334,12 @@ export function buildIntelligenceBundle(input: {
       collectedByMonth.set(ck, (collectedByMonth.get(ck) || 0) + toApproxUsd(inv, proofPrimaryAmount(p, inv)));
     }
   }
+
+  const reportingMonths = last12.map((month) => month.key);
+  const currencyCharts = deriveRevenueCurrencyCharts(
+    deriveRevenueCurrencyFacts({ invoices: billable, reportingMonths }),
+    { reportingMonths }
+  );
 
   let bestKey: string | null = null;
   let bestUsd = 0;
@@ -758,9 +841,7 @@ export function buildIntelligenceBundle(input: {
     revenueTrend,
     collectedVsBilledRatio,
     depositConversionRate,
-    collectedByMonth: last12.map((m) => ({ ...m, usd: collectedByMonth.get(m.key) || 0 })),
-    billedByMonth: last12.map((m) => ({ ...m, usd: billedByMonth.get(m.key) || 0 })),
-    overdueByMonth: last12.map((m) => ({ ...m, usd: overdueByMonth.get(m.key) || 0 }))
+    currencyCharts
   };
 
   return {
