@@ -2,7 +2,7 @@ import type { Permission, WorkspaceRole } from "@/lib/permissions";
 import { hasPermission } from "@/lib/permissions";
 
 export type NavigationDestination = {
-  id: "home" | "invoices" | "payments" | "clients" | "reports" | "team" | "settings";
+  id: "home" | "invoices" | "payments" | "clients" | "reports" | "team" | "settings" | "notifications";
   href: string;
   label: string;
   permission?: Permission;
@@ -17,6 +17,7 @@ export const primaryNavigation: readonly NavigationDestination[] = [
   { id: "clients", href: "/clients", label: "Clients", permission: "clients.view", mobile: true },
   { id: "reports", href: "/reports", label: "Reports", permission: "reports.view" },
   { id: "team", href: "/team", label: "Team", permission: "team.view" },
+  { id: "notifications", href: "/notifications", label: "Notifications" },
   { id: "settings", href: "/settings/profile", label: "Settings", permission: "settings.manage" }
 ] as const;
 

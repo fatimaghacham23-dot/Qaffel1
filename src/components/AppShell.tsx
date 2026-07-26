@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CircleDollarSign, FileSpreadsheet, LayoutDashboard, Menu, ReceiptText, Settings, Users, X } from "lucide-react";
+import { Bell, CircleDollarSign, FileSpreadsheet, LayoutDashboard, Menu, ReceiptText, Settings, Users, X } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
 import { mobileNavigationForRole, navigationForRole } from "@/lib/information-architecture";
 import type { WorkspaceRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-const icons = { home: LayoutDashboard, invoices: ReceiptText, payments: CircleDollarSign, clients: Users, reports: FileSpreadsheet, team: Users, settings: Settings };
+const icons = { home: LayoutDashboard, invoices: ReceiptText, payments: CircleDollarSign, clients: Users, reports: FileSpreadsheet, team: Users, settings: Settings, notifications: Bell };
 const active = (pathname: string, href: string) => href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
 export function AppShell({ children, role = "owner" }: { children: React.ReactNode; role?: WorkspaceRole | null }) {
