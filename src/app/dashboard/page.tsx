@@ -24,6 +24,7 @@ import { getWorkspaceContext } from "@/lib/get-workspace";
 import { dashboardScope } from "@/lib/dashboard-scope";
 import { notificationPreview } from "@/lib/notifications";
 import { getWorkspaceNotifications } from "@/lib/notifications-server";
+import { getWorkspaceOnboardingEvidence } from "@/lib/onboarding-evidence";
 import { requireUser } from "@/lib/supabase/server";
 
 type Result<T> = { data: T[] | null; error: { message?: string } | null; count?: number | null };
@@ -181,7 +182,8 @@ export default async function DashboardPage() {
   const metrics = dashboardMetrics({ invoices, payments: acceptedResult.data || [], now });
   const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx)).actionItems;
   const activity = dashboardActivity(eventResult.data || []);
-  const onboarding = dashboardOnboarding({ role: ctx.role, clientCount: clientCountResult.count || 0, invoiceCount: invoiceCountResult.count || 0, sharedInvoice: (shareCountResult.count || 0) > 0 });
+  const onboardingEvidence = await getWorkspaceOnboardingEvidence(supabase, ctx);
+  const onboarding = dashboardOnboarding({ role: ctx.role, evidence: onboardingEvidence });
   const cashFlow = cashFlowPreview({ invoices, payments: acceptedResult.data || [], now });
   const collectedLabel = groupedMoney(metrics.collected);
   const actionCount = Math.max(attention.length, pendingCountResult.count || 0);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dashboardMetrics, type DashboardInvoice, type DashboardPayment } from "@/lib/dashboard";
 import { buildDerivedNotifications } from "@/lib/notifications";
+import { createOnboardingEvidenceFixture } from "@/test/onboarding-fixtures";
 import { buildWorkspaceMonthlyReports, type WorkspaceReportInvoice } from "@/lib/workspace-monthly-report";
 
 type ScopedInvoice = DashboardInvoice & { workspace_id: string | null };
@@ -32,8 +33,7 @@ const payments: DashboardPayment[] = [
 ];
 
 const notificationInput = () => ({
-  profile: { business_name: "Qaffel", phone: "+961", support_email: "support@example.com", logo_storage_path: "logo" },
-  activePaymentMethodCount: 1, clientCount: 1, invoiceCount: 1, sharedInvoiceCount: 1,
+  onboardingEvidence: createOnboardingEvidenceFixture(),
   pendingProofCount: 0, rejectedProofCount: 0, pendingInvitationCount: 0, assignmentCount: 0, invoices: workspaceA, now
 });
 

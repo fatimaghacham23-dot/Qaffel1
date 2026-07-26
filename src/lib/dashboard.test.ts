@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createOnboardingEvidenceFixture } from "@/test/onboarding-fixtures";
 import { hasPermission, type WorkspaceRole } from "@/lib/permissions";
 import {
   DASHBOARD_ACTIVITY_LIMIT,
@@ -100,10 +101,10 @@ describe("dashboard attention", () => {
 
 describe("dashboard onboarding and activity", () => {
   it("derives the three onboarding steps from real workspace state", () => {
-    const empty = dashboardOnboarding({ role: "owner", clientCount: 0, invoiceCount: 0, sharedInvoice: false });
+    const empty = dashboardOnboarding({ role: "owner", evidence: createOnboardingEvidenceFixture({ hasClient: false, hasInvoice: false, hasSharedPaymentRequest: false }) });
     expect(empty?.map((step) => [step.id, step.complete])).toEqual([["client", false], ["invoice", false], ["share", false]]);
-    expect(dashboardOnboarding({ role: "owner", clientCount: 1, invoiceCount: 1, sharedInvoice: true })).toBeNull();
-    expect(dashboardOnboarding({ role: "reviewer", clientCount: 0, invoiceCount: 0, sharedInvoice: false })).toBeNull();
+    expect(dashboardOnboarding({ role: "owner", evidence: createOnboardingEvidenceFixture() })).toBeNull();
+    expect(dashboardOnboarding({ role: "reviewer", evidence: createOnboardingEvidenceFixture({ hasClient: false, hasInvoice: false, hasSharedPaymentRequest: false }) })).toBeNull();
   });
 
   it("keeps only five latest meaningful events in descending order", () => {

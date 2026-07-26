@@ -3,6 +3,7 @@ import "server-only";
 import { isDueWithinSevenDays, isOverdueInvoice, isPartiallyPaidInvoice, type CollectionInvoice } from "@/lib/collection";
 import { isQuoteDocument } from "@/lib/documents";
 import { hasPermission, type Permission, type WorkspaceRole } from "@/lib/permissions";
+import type { OnboardingEvidence } from "@/lib/onboarding-evidence";
 
 export type NotificationCategory = "onboarding" | "payments" | "collections" | "team" | "system";
 export type NotificationSeverity = "critical" | "warning" | "info";
@@ -10,8 +11,7 @@ export type NotificationFilter = "all" | "action" | "onboarding" | "payments" | 
 export type DerivedNotification = { id: string; category: NotificationCategory; severity: NotificationSeverity; title: string; description: string; reason: string; destinationUrl: string; permittedRoles: WorkspaceRole[]; actionLabel?: string };
 export type NotificationInvoice = CollectionInvoice;
 export type NotificationDerivationInput = {
-  profile: { business_name?: string | null; phone?: string | null; support_email?: string | null; logo_storage_path?: string | null } | null;
-  activePaymentMethodCount: number; clientCount: number; invoiceCount: number; sharedInvoiceCount: number;
+  onboardingEvidence: OnboardingEvidence;
   pendingProofCount: number; rejectedProofCount: number; pendingInvitationCount: number; assignmentCount: number;
   invoices: NotificationInvoice[]; now?: Date;
 };
@@ -28,14 +28,17 @@ export function buildDerivedNotifications(input: NotificationDerivationInput): D
   const week = new Date(now); week.setDate(week.getDate() + 7);
   const sevenDays = week.toISOString().slice(0, 10), items: DerivedNotification[] = [];
   const settingsRoles = rolesWith("settings.manage"), invoiceRoles = rolesWith("invoices.view"), reviewRoles = rolesWith("proofs.review");
-  if (!input.profile?.business_name?.trim()) items.push(notification("onboarding:business-profile", "onboarding", "warning", "Complete your business profile", "Add your business name so invoices and payment pages identify your business.", "Business name is missing.", "/settings/profile", settingsRoles, "Edit profile"));
-  if (!input.profile?.phone?.trim() && !input.profile?.support_email?.trim()) items.push(notification("onboarding:contact-details", "onboarding", "info", "Add a support contact", "Give clients a way to reach your business when they need payment help.", "No business phone or support email is configured.", "/settings/profile", settingsRoles, "Add contact"));
-  if (!input.profile?.logo_storage_path?.trim()) items.push(notification("onboarding:branding", "onboarding", "info", "Add branding to client pages", "A logo or brand treatment helps clients recognize your invoices and receipts.", "No logo is configured.", "/settings/profile", settingsRoles, "Open branding"));
-  if (!input.activePaymentMethodCount) items.push(notification("onboarding:payment-method", "onboarding", "critical", "Add a payment method", "Clients need at least one active payment method before they can complete a payment request.", "No active payment method is configured.", "/settings/payment-methods", settingsRoles, "Add payment method"));
-  if (!input.clientCount) items.push(notification("onboarding:first-client", "onboarding", "info", "Add your first client", "Create a client record before issuing a payment request.", "No client records exist.", "/clients/new", rolesWith("clients.create"), "Add client"));
-  if (!input.invoiceCount) items.push(notification("onboarding:first-invoice", "onboarding", "info", "Create your first invoice", "Start the collection workflow with a billable invoice.", "No billable invoices exist.", "/invoices/new", rolesWith("invoices.create"), "Create invoice"));
-  if (input.invoiceCount > 0 && !input.sharedInvoiceCount) items.push(notification("onboarding:share-invoice", "onboarding", "info", "Share your first payment request", "Open an invoice to prepare a payment link or WhatsApp message for a client.", "No recorded payment-link or reminder sharing activity exists.", "/invoices", rolesWith("invoices.send"), "Open invoices"));
-  if (input.pendingProofCount) items.push(notification("payments:proof-review", "payments", "critical", "Payment proofs need review", `${input.pendingProofCount} payment proof${input.pendingProofCount === 1 ? " is" : "s are"} awaiting a decision.`, "Pending payment proofs require a secure review action.", "/payments?view=awaiting", reviewRoles, "Review proofs"));
+  const evidence = input.onboardingEvidence;
+  if (!evidence.hasCompleteBusinessIdentity) {
+    if (evidence.missingBusinessIdentityFields.includes("business_name")) items.push(notification("onboarding:business-profile", "onboarding", "warning", "Complete your business profile", "Add the business name clients see on invoices and payment pages.", "Business name is missing.", "/settings/profile", settingsRoles, "Edit profile"));
+    if (evidence.missingBusinessIdentityFields.includes("support_contact")) items.push(notification("onboarding:contact-details", "onboarding", "info", "Add support contact details", "Give clients a way to reach your business when they need payment help.", "Support contact details are missing.", "/settings/profile", settingsRoles, "Add contact"));
+  }
+  if (!evidence.hasActivePaymentMethod) items.push(notification("onboarding:payment-method", "onboarding", "critical", "Add a payment method", "Clients need at least one active payment method before they can complete a payment request.", "No active payment method is configured.", "/settings/payment-methods", settingsRoles, "Add payment method"));
+  if (!evidence.hasClient) items.push(notification("onboarding:first-client", "onboarding", "info", "Create your first client", "Create a client record before issuing a payment request.", "No client records exist.", "/clients/new", rolesWith("clients.create"), "Add client"));
+  if (!evidence.hasInvoice) items.push(notification("onboarding:first-invoice", "onboarding", "info", "Create your first invoice", "Start the collection workflow with a billable invoice.", "No billable invoices exist.", "/invoices/new", rolesWith("invoices.create"), "Create invoice"));
+  if (evidence.hasInvoice && !evidence.hasSharedPaymentRequest) items.push(notification("onboarding:share-invoice", "onboarding", "info", "Share your first payment request", "Open an invoice to prepare a payment link or WhatsApp message for a client.", "No active payment request has been shared.", "/invoices", rolesWith("invoices.send"), "Open invoices"));
+  if (evidence.requiresTeamSetup) items.push(notification("onboarding:team-setup", "onboarding", "info", "Set up your team", "Invite the people who need to work in this workspace.", "Team collaboration is required.", "/team", rolesWith("team.manage"), "Open team"));
+  if (evidence.requiresBillingSetup) items.push(notification("onboarding:billing-setup", "onboarding", "warning", "Complete billing setup", "Complete the workspace billing setup.", "Billing setup is required.", "/settings/billing", rolesWith("billing.manage"), "Open billing"));  if (input.pendingProofCount) items.push(notification("payments:proof-review", "payments", "critical", "Payment proofs need review", `${input.pendingProofCount} payment proof${input.pendingProofCount === 1 ? " is" : "s are"} awaiting a decision.`, "Pending payment proofs require a secure review action.", "/payments?view=awaiting", reviewRoles, "Review proofs"));
   if (input.rejectedProofCount) items.push(notification("payments:rejected-proofs", "payments", "warning", "Rejected payment proofs need follow-up", `${input.rejectedProofCount} rejected proof${input.rejectedProofCount === 1 ? " requires" : "s require"} an operational follow-up.`, "Rejected proof submissions are present.", "/payments?view=rejected", reviewRoles, "Open rejected proofs"));
 
   const invoices = input.invoices.filter((invoice) => !isQuoteDocument(invoice));

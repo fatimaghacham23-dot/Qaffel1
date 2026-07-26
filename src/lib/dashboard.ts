@@ -11,6 +11,7 @@ import {
   type CurrencyTotals
 } from "@/lib/collection";
 import { hasPermission, type WorkspaceRole } from "@/lib/permissions";
+import type { OnboardingEvidence } from "@/lib/onboarding-evidence";
 
 export const DASHBOARD_INVOICE_LIMIT = 600;
 export const DASHBOARD_PROOF_LIMIT = 40;
@@ -303,16 +304,16 @@ export function dashboardActivity(events: DashboardEvent[], limit = DASHBOARD_AC
 
 export type DashboardOnboardingStep = { id: "client" | "invoice" | "share"; label: string; detail: string; complete: boolean; href: string; action: string };
 
-export function dashboardOnboarding(input: { role: WorkspaceRole; clientCount: number; invoiceCount: number; sharedInvoice: boolean }): DashboardOnboardingStep[] | null {
+export function dashboardOnboarding(input: { role: WorkspaceRole; evidence: OnboardingEvidence }): DashboardOnboardingStep[] | null {
   if (input.role !== "owner" && input.role !== "admin") return null;
+  const { evidence } = input;
   const steps: DashboardOnboardingStep[] = [
-    { id: "client", label: "Add your first client", detail: "Save the person or business you want to collect from.", complete: input.clientCount > 0, href: "/clients/new", action: "Add client" },
-    { id: "invoice", label: "Create your first invoice", detail: "Set the amount, due date, and accepted payment methods.", complete: input.invoiceCount > 0, href: "/invoices/new", action: "Create invoice" },
-    { id: "share", label: "Share the payment link", detail: "Open your invoice and prepare the WhatsApp payment request.", complete: input.sharedInvoice, href: "/invoices", action: "Open invoices" }
+    { id: "client", label: "Add your first client", detail: "Save the person or business you want to collect from.", complete: evidence.hasClient, href: "/clients/new", action: "Add client" },
+    { id: "invoice", label: "Create your first invoice", detail: "Set the amount, due date, and accepted payment methods.", complete: evidence.hasInvoice, href: "/invoices/new", action: "Create invoice" },
+    { id: "share", label: "Share the payment link", detail: "Open your invoice and prepare the WhatsApp payment request.", complete: evidence.hasSharedPaymentRequest, href: "/invoices", action: "Open invoices" }
   ];
   return steps.every((step) => step.complete) ? null : steps;
 }
-
 export function dashboardGreeting(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
