@@ -80,6 +80,7 @@ export type OCInvoiceProof = {
 };
 
 export type OCInvoiceRow = {
+  workspace_id?: string | null;
   id: string;
   title: string;
   invoice_number?: string | null;

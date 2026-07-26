@@ -6,7 +6,9 @@
 import { documentStatus, isQuoteDocument } from "@/lib/documents";
 import { formatPaymentMethod, money, todayIso } from "@/lib/format";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
+import { isAcceptedNonVoidedPayment } from "@/lib/collection";
 import { csvEscapeCell, csvNumber, monthKeySafe } from "@/lib/safe-metrics";
+import { derivePaymentMethodCurrencyCharts, type MonthlyPaymentMethodCurrencyTotal, type PaymentMethodCurrencyChart } from "@/lib/payment-method-currency-charts";
 import type { InvoiceStatus } from "@/lib/types";
 import type { OCEventRow, OCInvoiceProof, OCInvoiceRow } from "@/lib/operations-center";
 
@@ -169,13 +171,6 @@ export type ClientSegmentationRow = {
   href: string;
 };
 
-export type StackedMethodMonth = {
-  label: string;
-  key: string;
-  /** method → approx. USD equivalent */
-  stacks: Record<string, number>;
-};
-
 export type IntelligenceBundle = {
   revenue: RevenueIntelligence;
   paymentMethods: MethodBehaviorRow[];
@@ -186,7 +181,7 @@ export type IntelligenceBundle = {
   monthlyReports: MonthlyReportRow[];
   operational: OperationalFilters;
   clientSegmentation: ClientSegmentationRow[];
-  stackedMethods: StackedMethodMonth[];
+  paymentMethodCurrencyCharts: PaymentMethodCurrencyChart[];
 };
 
 export type ClientIntelligence = {
@@ -208,13 +203,15 @@ function invoiceTitle(inv: OCInvoiceRow) {
 }
 
 export function buildIntelligenceBundle(input: {
+  workspaceId: string;
   invoices: OCInvoiceRow[];
   events: OCEventRow[];
   clients: { id: string; name: string | null; created_at: string }[];
 }): IntelligenceBundle {
-  const { invoices, events, clients } = input;
-  const billable = invoices.filter((i) => !isQuoteDocument(i));
-  const quotes = invoices.filter((i) => isQuoteDocument(i));
+  const { invoices, events, clients, workspaceId } = input;
+  const workspaceInvoices = invoices.filter((invoice) => invoice.workspace_id === workspaceId);
+  const billable = workspaceInvoices.filter((i) => !isQuoteDocument(i));
+  const quotes = workspaceInvoices.filter((i) => isQuoteDocument(i));
   const now = Date.now();
 
   const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
@@ -735,28 +732,23 @@ export function buildIntelligenceBundle(input: {
   }
   clientSegmentation.sort((a, b) => b.segments.length - a.segments.length);
 
-  const stackedMethods: StackedMethodMonth[] = last12.slice(-6).map(({ key, label }) => {
-    const stacks: Record<string, number> = {};
-    const methodTotals = new Map<string, number>();
-    for (const inv of billable) {
-      for (const p of inv.payment_proofs || []) {
-        if ((p.status || "").toLowerCase() !== "accepted") continue;
-        const conf = p.confirmed_at || p.uploaded_at;
-        const confMk = conf ? monthKeySafe(conf) : null;
-        if (!confMk || confMk !== key) continue;
-        const mk = methodKey(p.method);
-        methodTotals.set(mk, (methodTotals.get(mk) || 0) + toApproxUsd(inv, proofPrimaryAmount(p, inv)));
-      }
+  const chartMonths = new Set(last12.slice(-6).map((month) => month.key));
+  const paymentMethodFacts: MonthlyPaymentMethodCurrencyTotal[] = [];
+  for (const invoice of billable) {
+    const currency = String(invoice.currency || "").trim().toUpperCase();
+    for (const proof of invoice.payment_proofs || []) {
+      if (!isAcceptedNonVoidedPayment(proof)) continue;
+      const month = monthKeySafe(proof.confirmed_at || proof.uploaded_at);
+      if (!month || !chartMonths.has(month)) continue;
+      paymentMethodFacts.push({
+        month,
+        method: methodKey(proof.method),
+        currency,
+        amount: currency === "LBP" ? num(proof.amount_lbp) : currency === "USD" ? num(proof.amount_usd) : 0
+      });
     }
-    const top = [...methodTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-    let other = 0;
-    for (const [m, v] of methodTotals) {
-      if (top.some(([tm]) => tm === m)) stacks[m] = v;
-      else other += v;
-    }
-    if (other > 0) stacks["Other"] = other;
-    return { key, label, stacks };
-  });
+  }
+  const paymentMethodCurrencyCharts = derivePaymentMethodCurrencyCharts(paymentMethodFacts);
 
   const revenue: RevenueIntelligence = {
     bestEarningMonthLabel: bestLabel,
@@ -781,7 +773,7 @@ export function buildIntelligenceBundle(input: {
     monthlyReports,
     operational,
     clientSegmentation,
-    stackedMethods
+    paymentMethodCurrencyCharts
   };
 }
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/supabase/server";
+import { getWorkspaceContext } from "@/lib/get-workspace";
 import { buildIntelligenceBundle } from "@/lib/intelligence-layer";
 import type { OCInvoiceRow } from "@/lib/operations-center";
 
@@ -38,24 +39,25 @@ function ListBlock({
 }
 
 export default async function IntelligenceDeepPage() {
-  const { supabase, user } = await requireUser();
+  const [{ supabase }, ctx] = await Promise.all([requireUser(), getWorkspaceContext()]);
   const [{ data: invoices }, { data: events }, { data: clients }] = await Promise.all([
     supabase
       .from("invoices")
       .select(
         "*, exchange_rate_lbp_per_usd, clients(id, name, phone, email), payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at, confirmed_at, payment_date, method, voided_at)"
       )
-      .eq("user_id", user.id),
+      .eq("workspace_id", ctx.workspaceId),
     supabase
       .from("invoice_events")
       .select("id, invoice_id, event_type, message, created_at, metadata")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(2000),
-    supabase.from("clients").select("id, name, created_at").eq("user_id", user.id)
+    supabase.from("clients").select("id, name, created_at").eq("workspace_id", ctx.workspaceId)
   ]);
 
   const bundle = buildIntelligenceBundle({
+    workspaceId: ctx.workspaceId,
     invoices: (invoices || []) as OCInvoiceRow[],
     events: (events || []) as any,
     clients: (clients || []) as { id: string; name: string | null; created_at: string }[]
