@@ -1,0 +1,7 @@
+import { groupAmountsByCurrency } from "@/lib/currency-totals";
+export type MonthlyPaymentMethodCurrencyTotal={month:string;method:string;currency:string;amount:number};
+export type PaymentMethodChartSeries={key:string;method:string;currency:string;stackId:string};
+export type PaymentMethodChartRow={month:string;values:Record<string,number>};
+export type PaymentMethodCurrencyChart={currency:string;rows:PaymentMethodChartRow[];series:PaymentMethodChartSeries[]};
+const validMonth=(month:string)=>/^\d{4}-\d{2}$/.test(month);
+export function derivePaymentMethodCurrencyCharts(facts:ReadonlyArray<MonthlyPaymentMethodCurrencyTotal>):PaymentMethodCurrencyChart[]{const valid=facts.filter(f=>validMonth(f.month)&&f.method.trim()&&Number.isFinite(f.amount));const currencies=groupAmountsByCurrency(valid.map(f=>({currency:f.currency,amount:0}))).map(x=>x.currency);return currencies.map(currency=>{const subset=valid.filter(f=>f.currency.trim().toUpperCase()===currency);const methods=[...new Set(subset.map(f=>f.method.trim()))].sort((a,b)=>a.localeCompare(b));const months=[...new Set(subset.map(f=>f.month))].sort();const series=methods.map(method=>({key:`${currency}:${method}`,method,currency,stackId:`method:${currency}`}));const rows=months.map(month=>{const values:Record<string,number>={};for(const seriesItem of series){values[seriesItem.key]=groupAmountsByCurrency(subset.filter(f=>f.month===month&&f.method.trim()===seriesItem.method).map(f=>({currency,amount:f.amount})))[0]?.amount||0}return{month,values}});return{currency,rows,series}})}
