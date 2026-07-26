@@ -13,7 +13,7 @@ export const DASHBOARD_INVOICE_LIMIT = 600;
 export const DASHBOARD_PROOF_LIMIT = 40;
 export const DASHBOARD_ASSIGNMENT_LIMIT = 30;
 export const DASHBOARD_EVENT_QUERY_LIMIT = 40;
-export const DASHBOARD_ATTENTION_LIMIT = 6;
+export const DASHBOARD_ATTENTION_LIMIT = 5;
 export const DASHBOARD_ACTIVITY_LIMIT = 5;
 
 export type DashboardCapabilities = {
