@@ -53,14 +53,14 @@ export default async function IntelligenceDeepPage() {
       .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(2000),
-    supabase.from("clients").select("id, name, created_at").eq("workspace_id", ctx.workspaceId)
+    supabase.from("clients").select("id, name, workspace_id, created_at").eq("workspace_id", ctx.workspaceId)
   ]);
 
   const bundle = buildIntelligenceBundle({
     workspaceId: ctx.workspaceId,
     invoices: (invoices || []) as OCInvoiceRow[],
     events: (events || []) as any,
-    clients: (clients || []) as { id: string; name: string | null; created_at: string }[]
+    clients: (clients || []) as { id: string; name: string | null; workspace_id?: string | null; created_at: string }[]
   });
 
   const op = bundle.operational;

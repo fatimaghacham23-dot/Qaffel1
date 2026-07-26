@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildIntelligenceBundle, buildMonthlyReportCsv } from "@/lib/intelligence-layer";
+import { buildMonthlyIntelligenceSummaries, buildMonthlyReportCsv } from "@/lib/intelligence-layer";
 import {
   buildFinanceClosingModel,
   buildFinanceExportCsv,
@@ -15,7 +15,6 @@ import type { OCInvoiceRow } from "@/lib/operations-center";
 import { hasPermission } from "@/lib/permissions";
 import { toCsv } from "@/lib/csv";
 import { workspaceContextFromMembership } from "@/lib/workspace-authorization";
-import { buildWorkspaceMonthlyReportCsv, buildWorkspaceMonthlyReports, type WorkspaceReportInvoice } from "@/lib/workspace-monthly-report";
 
 const FINANCE_PRESET_ALIASES: Record<string, string> = {
   "monthly-pack": "finance_close_snapshot",
@@ -172,14 +171,19 @@ export async function GET(request: NextRequest) {
     const [{ data: invoices }, { data: clients }] = await Promise.all([
       supabase
         .from("invoices")
-        .select("id,status,document_type,currency,amount_usd,amount_lbp,due_date,created_at,payment_proofs(status,amount_usd,amount_lbp,uploaded_at,confirmed_at,reviewed_at,method,voided_at)")
+        .select("workspace_id,id,status,document_type,currency,amount_usd,amount_lbp,due_date,created_at,payment_proofs(status,amount_usd,amount_lbp,uploaded_at,confirmed_at,method,voided_at)")
         .eq("workspace_id", ctx.workspaceId)
         .limit(1500),
-      supabase.from("clients").select("created_at").eq("workspace_id", ctx.workspaceId).limit(1500)
+      supabase.from("clients").select("workspace_id,created_at").eq("workspace_id", ctx.workspaceId).limit(1500)
     ]);
 
-    const rows = buildWorkspaceMonthlyReports({ invoices: (invoices || []) as WorkspaceReportInvoice[], clients: clients || [] });
-    const csv = buildWorkspaceMonthlyReportCsv(m, rows);
+    const summaries = buildMonthlyIntelligenceSummaries({
+      workspaceId: ctx.workspaceId,
+      invoices: invoices || [],
+      clients: clients || [],
+      reportingMonths: [m]
+    });
+    const csv = buildMonthlyReportCsv(m, summaries);
 
     return csvResponse(csv, `qaffel-report-${m}.csv`);
   } catch {

@@ -12,6 +12,13 @@ import { derivePaymentMethodCurrencyCharts, type MonthlyPaymentMethodCurrencyTot
 import { deriveRevenueCurrencyCharts, type MonthlyRevenueCurrencyFact, type RevenueCurrencyChart } from "@/lib/revenue-currency-charts";
 import { deriveMomentumCurrencyIndicators, type MomentumCollectionCurrencyFact, type MomentumCurrencyIndicatorInput, type MomentumCurrencyIndicatorResult, type MomentumOutstandingCurrencyFact } from "@/lib/momentum-currency-indicators";
 import { deriveRevenueCurrencyKpis, type CollectedBilledCurrencyFact, type InvoiceCurrencyFact, type MonthlyRevenueCurrencyValue, type RevenueCurrencyKpiInput, type RevenueCurrencyKpiSummary } from "@/lib/revenue-currency-kpis";
+import {
+  deriveMonthlyIntelligenceCurrencySummaries,
+  type MonthlyIntelligenceCurrencyFact,
+  type MonthlyIntelligenceCurrencySummaryResult,
+  type MonthlyIntelligencePaymentMethodFact,
+  type MonthlySharedIntelligenceFact
+} from "@/lib/monthly-intelligence-currency-summaries";
 import type { InvoiceStatus } from "@/lib/types";
 import type { OCEventRow, OCInvoiceProof, OCInvoiceRow } from "@/lib/operations-center";
 
@@ -37,10 +44,6 @@ function median(nums: number[]): number | null {
 
 function invPrimaryCur(inv: OCInvoiceRow): "USD" | "LBP" {
   return (inv.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
-}
-
-function proofPrimaryAmount(p: OCInvoiceProof, inv: OCInvoiceRow): number {
-  return invPrimaryCur(inv) === "USD" ? num(p.amount_usd) : num(p.amount_lbp);
 }
 
 function invoiceBilledPrimary(inv: OCInvoiceRow): number {
@@ -120,18 +123,7 @@ export type MomentumIndicators = MomentumCurrencyIndicatorResult;
 
 export type SmartRecommendation = { text: string; basis: string };
 
-export type MonthlyReportRow = {
-  monthKey: string;
-  monthLabel: string;
-  invoicesCreated: number;
-  /** Accepted proofs in month, approx. USD (LBP at invoice rate). */
-  paidTotalUsd: number;
-  /** Overdue remaining balances in month bucket, approx. USD. */
-  overdueTotalUsd: number;
-  newClients: number;
-  topMethod: string | null;
-  operationalIssues: number;
-};
+
 
 export type OperationalListItem = {
   id: string;
@@ -166,7 +158,7 @@ export type IntelligenceBundle = {
   reminders: ReminderEffectiveness;
   momentum: MomentumIndicators;
   recommendations: SmartRecommendation[];
-  monthlyReports: MonthlyReportRow[];
+  monthlyReports: MonthlyIntelligenceCurrencySummaryResult;
   operational: OperationalFilters;
   clientSegmentation: ClientSegmentationRow[];
   paymentMethodCurrencyCharts: PaymentMethodCurrencyChart[];
@@ -371,11 +363,135 @@ export function deriveMomentumCurrencyFacts(input: {
     }
   };
 }
+export type MonthlyIntelligenceInvoice = {
+  workspace_id?: string | null;
+  id: string;
+  status: InvoiceStatus;
+  document_type?: string | null;
+  currency?: string | null;
+  amount_usd?: number | string | null;
+  amount_lbp?: number | string | null;
+  due_date?: string | null;
+  created_at?: string | null;
+  payment_proofs?: Array<{
+    status?: string | null;
+    amount_usd?: number | string | null;
+    amount_lbp?: number | string | null;
+    uploaded_at?: string | null;
+    confirmed_at?: string | null;
+    method?: string | null;
+    voided_at?: string | null;
+  }> | null;
+};
+
+export type MonthlyIntelligenceClient = {
+  workspace_id?: string | null;
+  created_at?: string | null;
+};
+
+function monthlyCollectionInvoice(invoice: MonthlyIntelligenceInvoice): CollectionInvoice {
+  return {
+    id: invoice.id,
+    status: invoice.status,
+    document_type: invoice.document_type,
+    currency: invoice.currency,
+    amount_usd: invoice.amount_usd === null || invoice.amount_usd === undefined ? null : num(invoice.amount_usd),
+    amount_lbp: invoice.amount_lbp === null || invoice.amount_lbp === undefined ? null : num(invoice.amount_lbp),
+    due_date: invoice.due_date,
+    created_at: invoice.created_at,
+    payment_proofs: (invoice.payment_proofs || []).map((proof) => ({
+      status: proof.status || "",
+      amount_usd: proof.amount_usd === null || proof.amount_usd === undefined ? null : num(proof.amount_usd),
+      amount_lbp: proof.amount_lbp === null || proof.amount_lbp === undefined ? null : num(proof.amount_lbp),
+      voided_at: proof.voided_at
+    }))
+  };
+}
+
+function monthlyCurrency(invoice: MonthlyIntelligenceInvoice): "USD" | "LBP" {
+  return (invoice.currency || "USD").trim().toUpperCase() === "LBP" ? "LBP" : "USD";
+}
+
+function monthlyProofAmount(
+  proof: NonNullable<MonthlyIntelligenceInvoice["payment_proofs"]>[number],
+  currency: "USD" | "LBP"
+): number {
+  return currency === "LBP" ? num(proof.amount_lbp) : num(proof.amount_usd);
+}
+
+/**
+ * Produces only authorised, workspace-scoped factual inputs before calling the
+ * shared currency-safe monthly derivation exactly once.
+ */
+export function buildMonthlyIntelligenceSummaries(input: {
+  workspaceId: string;
+  invoices: readonly MonthlyIntelligenceInvoice[];
+  clients: readonly MonthlyIntelligenceClient[];
+  reportingMonths: readonly string[];
+}): MonthlyIntelligenceCurrencySummaryResult {
+  const reportingMonthSet = new Set(input.reportingMonths);
+  const billable = input.invoices.filter((invoice) => invoice.workspace_id === input.workspaceId && !isQuoteDocument(invoice));
+  const currencyFacts: MonthlyIntelligenceCurrencyFact[] = [];
+  const sharedFacts: MonthlySharedIntelligenceFact[] = [];
+  const paymentMethodFacts: MonthlyIntelligencePaymentMethodFact[] = [];
+  let paymentSourceOrder = 0;
+
+  for (const invoice of billable) {
+    const createdMonth = monthKeySafe(invoice.created_at);
+    if (createdMonth && reportingMonthSet.has(createdMonth)) {
+      sharedFacts.push({ month: createdMonth, invoicesCreated: 1, newClients: 0 });
+    }
+
+    const collectionInvoice = monthlyCollectionInvoice(invoice);
+    if (isOutstandingInvoice(collectionInvoice) && invoice.due_date && invoice.due_date < todayIso()) {
+      const dueMonth = monthKeySafe(invoice.due_date) ?? monthKeySafe(`${invoice.due_date}T12:00:00`);
+      if (dueMonth && reportingMonthSet.has(dueMonth)) {
+        currencyFacts.push({
+          month: dueMonth,
+          currency: monthlyCurrency(invoice),
+          collected: 0,
+          overdue: getOutstandingBalance(collectionInvoice).primaryBalance
+        });
+      }
+    }
+
+    for (const proof of invoice.payment_proofs || []) {
+      if ((proof.status || "").toLowerCase() !== "accepted") continue;
+      const occurredAt = proof.confirmed_at || proof.uploaded_at;
+      const paymentMonth = monthKeySafe(occurredAt);
+      if (!paymentMonth || !reportingMonthSet.has(paymentMonth)) continue;
+      const currency = monthlyCurrency(invoice);
+      currencyFacts.push({
+        month: paymentMonth,
+        currency,
+        collected: monthlyProofAmount(proof, currency),
+        overdue: 0
+      });
+      paymentMethodFacts.push({ month: paymentMonth, method: methodKey(proof.method), sourceOrder: paymentSourceOrder });
+      paymentSourceOrder += 1;
+    }
+  }
+
+  for (const client of input.clients) {
+    if (client.workspace_id !== input.workspaceId) continue;
+    const createdMonth = monthKeySafe(client.created_at);
+    if (createdMonth && reportingMonthSet.has(createdMonth)) {
+      sharedFacts.push({ month: createdMonth, invoicesCreated: 0, newClients: 1 });
+    }
+  }
+
+  return deriveMonthlyIntelligenceCurrencySummaries({
+    reportingMonths: input.reportingMonths,
+    currencyFacts,
+    sharedFacts,
+    paymentMethodFacts
+  });
+}
 export function buildIntelligenceBundle(input: {
   workspaceId: string;
   invoices: OCInvoiceRow[];
   events: OCEventRow[];
-  clients: { id: string; name: string | null; created_at: string }[];
+  clients: { id: string; name: string | null; workspace_id?: string | null; created_at: string }[];
 }): IntelligenceBundle {
   const { invoices, events, clients, workspaceId } = input;
   const workspaceInvoices = invoices.filter((invoice) => invoice.workspace_id === workspaceId);
@@ -383,48 +499,14 @@ export function buildIntelligenceBundle(input: {
   const quotes = workspaceInvoices.filter((i) => isQuoteDocument(i));
   const now = Date.now();
 
-  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
-  const last12: { key: string; label: string }[] = [];
+  const last12: { key: string }[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date();
     d.setDate(1);
     d.setHours(0, 0, 0, 0);
     d.setMonth(d.getMonth() - i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    last12.push({ key, label: monthFormatter.format(d) });
-  }
-
-  const collectedByMonth = new Map<string, number>();
-  const billedByMonth = new Map<string, number>();
-  const overdueByMonth = new Map<string, number>();
-  for (const m of last12) {
-    collectedByMonth.set(m.key, 0);
-    billedByMonth.set(m.key, 0);
-    overdueByMonth.set(m.key, 0);
-  }
-
-  for (const inv of billable) {
-    if (!inv.created_at) continue;
-    const mk = monthKeySafe(inv.created_at);
-    if (mk && billedByMonth.has(mk)) {
-      billedByMonth.set(mk, (billedByMonth.get(mk) || 0) + toApproxUsd(inv, invoiceBilledPrimary(inv)));
-    }
-    const ds = display(inv);
-    if (ds === "overdue" && inv.due_date) {
-      const dk = monthKeySafe(inv.due_date) ?? monthKeySafe(`${inv.due_date}T12:00:00`);
-      const bal = getRemainingBalance(inv as any, rowProofs(inv));
-      if (dk && overdueByMonth.has(dk)) {
-        overdueByMonth.set(dk, (overdueByMonth.get(dk) || 0) + toApproxUsd(inv, bal.primaryBalance));
-      }
-    }
-    for (const p of inv.payment_proofs || []) {
-      if ((p.status || "").toLowerCase() !== "accepted") continue;
-      const conf = p.confirmed_at || p.uploaded_at;
-      if (!conf) continue;
-      const ck = monthKeySafe(conf);
-      if (!ck || !collectedByMonth.has(ck)) continue;
-      collectedByMonth.set(ck, (collectedByMonth.get(ck) || 0) + toApproxUsd(inv, proofPrimaryAmount(p, inv)));
-    }
+    last12.push({ key });
   }
 
   const reportingMonths = last12.map((month) => month.key);
@@ -619,60 +701,7 @@ export function buildIntelligenceBundle(input: {
     });
   }
 
-  const monthlyReports: MonthlyReportRow[] = last12.map(({ key, label }) => {
-    const created = billable.filter((i) => i.created_at && monthKeySafe(i.created_at) === key).length;
-    const paidUsd = billable.reduce((s, inv) => {
-      for (const p of inv.payment_proofs || []) {
-        if ((p.status || "").toLowerCase() !== "accepted") continue;
-        const conf = p.confirmed_at || p.uploaded_at;
-        const confMk = conf ? monthKeySafe(conf) : null;
-        if (!confMk || confMk !== key) continue;
-        s += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-      }
-      return s;
-    }, 0);
-    const overdueUsd = billable
-      .filter((i) => {
-        if (display(i) !== "overdue" || !i.due_date) return false;
-        const dm = monthKeySafe(i.due_date) ?? monthKeySafe(`${i.due_date}T12:00:00`);
-        return dm === key;
-      })
-      .reduce((s, i) => {
-        const bal = getRemainingBalance(i as any, rowProofs(i));
-        return s + toApproxUsd(i, bal.primaryBalance);
-      }, 0);
-    const newClients = clients.filter((c) => c.created_at && monthKeySafe(c.created_at) === key).length;
-    const methodUse = new Map<string, number>();
-    for (const inv of billable) {
-      for (const p of inv.payment_proofs || []) {
-        if ((p.status || "").toLowerCase() !== "accepted") continue;
-        const conf = p.confirmed_at || p.uploaded_at;
-        const confMk = conf ? monthKeySafe(conf) : null;
-        if (!confMk || confMk !== key) continue;
-        const mk = methodKey(p.method);
-        methodUse.set(mk, (methodUse.get(mk) || 0) + 1);
-      }
-    }
-    let topMethod: string | null = null;
-    let topC = 0;
-    for (const [m, c] of methodUse) if (c > topC) { topMethod = m; topC = c; }
-
-    const opsIssues =
-      (collectedByMonth.get(key) || 0) > 0 && overdueUsd > (collectedByMonth.get(key) || 0)
-        ? 1
-        : overdueUsd > 0 ? 1 : 0;
-
-    return {
-      monthKey: key,
-      monthLabel: label,
-      invoicesCreated: created,
-      paidTotalUsd: paidUsd,
-      overdueTotalUsd: overdueUsd,
-      newClients,
-      topMethod,
-      operationalIssues: opsIssues
-    };
-  });
+  const monthlyReports = buildMonthlyIntelligenceSummaries({ workspaceId, invoices, clients, reportingMonths });
 
   const reminderLast = new Map<string, string>();
   for (const e of events) {
@@ -929,42 +958,34 @@ export function buildClientIntelligence(input: {
   };
 }
 
-export function monthlyReportToCsv(row: MonthlyReportRow): string {
-  /** Amount columns: approx. USD equivalent (LBP converted at each invoice's rate). */
+export function monthlyReportToCsv(monthKey: string, summaries: MonthlyIntelligenceCurrencySummaryResult): string {
   const headers = [
     "month",
+    "currency",
+    "collected",
+    "overdue",
     "invoices_created",
-    "paid_total_usd",
-    "overdue_total_usd",
     "new_clients",
     "top_payment_method",
     "operational_issue_flag"
   ];
-  const line = [
-    csvEscapeCell(row.monthKey),
-    String(row.invoicesCreated),
-    csvNumber(row.paidTotalUsd),
-    csvNumber(row.overdueTotalUsd),
-    String(row.newClients),
-    csvEscapeCell(row.topMethod || ""),
-    String(row.operationalIssues)
-  ];
-  return `${headers.join(",")}\n${line.join(",")}\n`;
+  const shared = summaries.sharedSummaries.find((summary) => summary.month === monthKey);
+  const lines = summaries.currencySummaries
+    .filter((summary) => summary.month === monthKey)
+    .sort((left, right) => left.month.localeCompare(right.month) || left.currency.localeCompare(right.currency))
+    .map((summary) => [
+      csvEscapeCell(summary.month),
+      csvEscapeCell(summary.currency),
+      csvNumber(summary.collected),
+      csvNumber(summary.overdue),
+      String(shared?.invoicesCreated || 0),
+      String(shared?.newClients || 0),
+      csvEscapeCell(shared?.topMethod || ""),
+      String(shared?.operationalIssues || 0)
+    ].join(","));
+  return `${headers.join(",")}\n${lines.join("\n")}${lines.length ? "\n" : ""}`;
 }
 
-export function buildMonthlyReportCsv(monthKey: string, rows: MonthlyReportRow[]): string {
-  const row = rows.find((r) => r.monthKey === monthKey);
-  if (!row) {
-    return monthlyReportToCsv({
-      monthKey,
-      monthLabel: monthKey,
-      invoicesCreated: 0,
-      paidTotalUsd: 0,
-      overdueTotalUsd: 0,
-      newClients: 0,
-      topMethod: null,
-      operationalIssues: 0
-    });
-  }
-  return monthlyReportToCsv(row);
+export function buildMonthlyReportCsv(monthKey: string, summaries: MonthlyIntelligenceCurrencySummaryResult): string {
+  return monthlyReportToCsv(monthKey, summaries);
 }
