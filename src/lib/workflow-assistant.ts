@@ -183,8 +183,13 @@ function daysPastLabel(days: number): string {
   return `${days} days past due`;
 }
 
-function primaryCurrency(inv: OCInvoiceRow | { currency?: string | null }): "USD" | "LBP" {
-  return (inv.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
+function workflowCurrency(inv: OCInvoiceRow): "USD" | "LBP" | null {
+  const currency = String(inv.currency || "").trim().toUpperCase();
+  return currency === "USD" || currency === "LBP" ? currency : null;
+}
+
+function hasUsdAmountPriority(inv: OCInvoiceRow): boolean {
+  return workflowCurrency(inv) === "USD";
 }
 
 function invoiceTitle(inv: Partial<OCInvoiceRow>): string {
@@ -286,14 +291,12 @@ function addAction(
 }
 
 function amountLabel(inv: OCInvoiceRow, balance = getRemainingBalance(inv as never, rowProofs(inv))): string {
-  return money(balance.primaryBalance, balance.primaryCurrency);
+  const currency = workflowCurrency(inv);
+  if (!currency) return `Amount unavailable (${String(inv.currency || "unspecified").trim().toUpperCase() || "unspecified"} is not configured)`;
+  return money(currency === "USD" ? balance.usd : balance.lbp, currency);
 }
 
-function approxUsd(inv: OCInvoiceRow, primaryAmount: number): number {
-  if (primaryCurrency(inv) === "USD") return primaryAmount;
-  const rate = num(inv.exchange_rate_lbp_per_usd) || 90000;
-  return rate > 0 ? primaryAmount / rate : 0;
-}
+
 
 type ClientHistory = {
   paidCount: number;
@@ -430,9 +433,11 @@ function pushInvoiceActions({
   }
 
   const balance = getRemainingBalance({ ...inv, status: rec } as never, proofs);
-  const remaining = balance.primaryBalance;
+  const currency = workflowCurrency(inv);
+  const remaining = currency === "USD" ? balance.usd : currency === "LBP" ? balance.lbp : 0;
+  const hasOpenBalance = currency ? remaining > 0 : openForCollection(status);
   const amount = amountLabel(inv, balance);
-  const amountRefUsd = approxUsd(inv, remaining);
+  const amountPriorityAvailable = hasUsdAmountPriority(inv);
   const dueAge = daysSinceDate(inv.due_date) || 0;
   const dueIn = daysUntilDate(inv.due_date);
 
@@ -515,10 +520,10 @@ function pushInvoiceActions({
     }
   }
 
-  if (remaining > 0 && openForCollection(status)) {
+  if (hasOpenBalance && openForCollection(status)) {
     if (status === "overdue") {
       const lateHistoryBoost = history?.latePaidCount && history.latePaidCount >= 2 ? 50 : 0;
-      const amountBoost = Math.min(120, amountRefUsd / 80);
+      const amountBoost = amountPriorityAvailable ? Math.min(120, remaining / 80) : 0;
       const overdueSort = 760 + Math.min(160, dueAge * 7) + amountBoost + lateHistoryBoost;
 
       if (pendingProofs.length === 0) {
@@ -555,7 +560,7 @@ function pushInvoiceActions({
         }
       }
 
-      if (dueAge >= 7 && remaining > 0 && !paymentPlanExists(inv)) {
+      if (dueAge >= 7 && hasOpenBalance && !paymentPlanExists(inv)) {
         addAction(actions, seen, {
           id: `plan-${inv.id}`,
           kind: "create_payment_plan",
@@ -604,7 +609,7 @@ function pushInvoiceActions({
         section: "clients_awaiting_response",
         invoiceId: inv.id,
         clientId: inv.client_id || undefined,
-        amountLabel: remaining > 0 ? amount : null,
+        amountLabel: hasOpenBalance ? amount : null,
         meta: [label, `viewed ${viewAge}d ago`],
         internalSort: 590 + Math.max(0, 7 - viewAge) * 8
       });
@@ -757,22 +762,43 @@ function buildWorkloadSuggestions(invoices: OCInvoiceRow[], actions: SuggestedNe
     });
   }
 
-  const overdueByClient = new Map<string, number>();
-  let overdueTotal = 0;
+  const overdueByCurrency = new Map<"USD" | "LBP", { total: number; byClient: Map<string, number> }>();
   for (const inv of invoices) {
     if (displayStatus(inv) !== "overdue" || !inv.client_id) continue;
-    const bal = getRemainingBalance(inv as never, rowProofs(inv));
-    const usd = approxUsd(inv, bal.primaryBalance);
-    overdueTotal += usd;
-    overdueByClient.set(inv.client_id, (overdueByClient.get(inv.client_id) || 0) + usd);
+    const balance = getRemainingBalance(inv as never, rowProofs(inv));
+    const currency = workflowCurrency(inv);
+    if (!currency) continue;
+    const amount = currency === "USD" ? balance.usd : balance.lbp;
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const group = overdueByCurrency.get(currency) || { total: 0, byClient: new Map<string, number>() };
+    group.total += amount;
+    group.byClient.set(inv.client_id, (group.byClient.get(inv.client_id) || 0) + amount);
+    overdueByCurrency.set(currency, group);
   }
-  let largest = 0;
-  for (const value of overdueByClient.values()) largest = Math.max(largest, value);
-  if (overdueTotal > 0 && largest / overdueTotal >= 0.45 && largest >= 1000) {
+
+  for (const [currency, group] of [...overdueByCurrency.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    let largest = 0;
+    for (const amount of group.byClient.values()) largest = Math.max(largest, amount);
+    const share = group.total > 0 ? largest / group.total : 0;
+    if (share < 0.45) continue;
+
+    if (currency === "USD") {
+      if (largest < 1000) continue;
+      suggestions.push({
+        id: "large-overdue-concentration-usd",
+        title: "Large overdue concentration in USD",
+        detail: `One client represents about ${Math.round(share * 100)}% of overdue USD balance.`,
+        href: "/clients",
+        ctaLabel: "Review clients",
+        tone: "info"
+      });
+      continue;
+    }
+
     suggestions.push({
-      id: "large-overdue-concentration",
-      title: "Large overdue concentration",
-      detail: `One client represents about ${Math.round((largest / overdueTotal) * 100)}% of overdue USD-equivalent balance.`,
+      id: "overdue-concentration-lbp-not-configured",
+      title: "Overdue LBP concentration needs review",
+      detail: `One client represents about ${Math.round(share * 100)}% of overdue LBP balance. No native LBP amount threshold is configured.`,
       href: "/clients",
       ctaLabel: "Review clients",
       tone: "info"
@@ -912,7 +938,7 @@ export function buildReminderAssistance(input: {
     out.push({
       id: "partial-detected",
       label: "Partial payment detected",
-      detail: `${money(balance.primaryBalance, balance.primaryCurrency)} remains open. Thank the client and confirm the remaining balance.`,
+      detail: `${amountLabel(inv, balance)} remains open. Thank the client and confirm the remaining balance.`,
       tone: "good"
     });
   }
@@ -921,7 +947,7 @@ export function buildReminderAssistance(input: {
     out.push({
       id: "recovery-recommended",
       label: dueAge >= 7 ? "Recovery reminder recommended" : "Gentle overdue reminder recommended",
-      detail: `${invoiceTitle(inv)} is ${daysPastLabel(dueAge)} with ${money(balance.primaryBalance, balance.primaryCurrency)} still open.`,
+      detail: `${invoiceTitle(inv)} is ${daysPastLabel(dueAge)} with ${amountLabel(inv, balance)} still open.`,
       tone: dueAge >= 7 ? "attention" : "info"
     });
   } else if (openForCollection(status) && dueIn !== null && dueIn >= 0 && dueIn <= 5) {

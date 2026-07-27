@@ -42,21 +42,9 @@ function median(nums: number[]): number | null {
   return medianSorted([...nums].sort((a, b) => a - b));
 }
 
-function invPrimaryCur(inv: OCInvoiceRow): "USD" | "LBP" {
-  return (inv.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
-}
-
-function invoiceBilledPrimary(inv: OCInvoiceRow): number {
-  return invPrimaryCur(inv) === "USD" ? num(inv.amount_usd) : num(inv.amount_lbp);
-}
-
-/** Chart / risk totals: LBP → USD via invoice rate; invalid rate → 0 */
-function toApproxUsd(inv: OCInvoiceRow, primaryAmt: number): number {
-  const a = Number.isFinite(primaryAmt) ? primaryAmt : 0;
-  if (invPrimaryCur(inv) === "USD") return a;
-  const r = num(inv.exchange_rate_lbp_per_usd);
-  if (r <= 0) return 0;
-  return a / r;
+function invoiceCurrency(inv: OCInvoiceRow): "USD" | "LBP" | null {
+  const currency = String(inv.currency || "").trim().toUpperCase();
+  return currency === "USD" || currency === "LBP" ? currency : null;
 }
 
 function rowProofs(inv: OCInvoiceRow): MinimalProof[] {
@@ -67,6 +55,17 @@ function rowProofs(inv: OCInvoiceRow): MinimalProof[] {
   }));
 }
 
+function remainingBalance(inv: OCInvoiceRow) {
+  return getRemainingBalance(
+    {
+      amount_usd: inv.amount_usd === null || inv.amount_usd === undefined ? null : num(inv.amount_usd),
+      amount_lbp: inv.amount_lbp === null || inv.amount_lbp === undefined ? null : num(inv.amount_lbp),
+      status: inv.status,
+      currency: inv.currency
+    },
+    rowProofs(inv)
+  );
+}
 function reconciled(inv: OCInvoiceRow): InvoiceStatus {
   return reconcileInvoiceStatus(inv as any, rowProofs(inv));
 }
@@ -720,17 +719,18 @@ export function buildIntelligenceBundle(input: {
     staleDrafts: []
   };
 
-  const clientRisk = new Map<string, { late: number; overdue: number; openUsd: number; name: string }>();
+  const clientRisk = new Map<string, { late: number; overdue: number; openByCurrency: Record<"USD" | "LBP", number>; name: string }>();
   for (const inv of billable) {
     if (!inv.client_id || !inv.clients?.name) continue;
     const cid = inv.client_id;
-    if (!clientRisk.has(cid)) clientRisk.set(cid, { late: 0, overdue: 0, openUsd: 0, name: inv.clients.name });
+    if (!clientRisk.has(cid)) clientRisk.set(cid, { late: 0, overdue: 0, openByCurrency: { USD: 0, LBP: 0 }, name: inv.clients.name });
     const row = clientRisk.get(cid)!;
     const ds = display(inv);
     if (ds === "overdue") row.overdue += 1;
     if (["sent", "unpaid", "partial", "overdue"].includes(ds)) {
-      const bal = getRemainingBalance(inv as any, rowProofs(inv));
-      row.openUsd += toApproxUsd(inv, bal.primaryBalance);
+      const balance = remainingBalance(inv);
+      const currency = invoiceCurrency(inv);
+      if (currency) row.openByCurrency[currency] += currency === "USD" ? balance.usd : balance.lbp;
     }
     for (const p of inv.payment_proofs || []) {
       if ((p.status || "").toLowerCase() !== "accepted" || !inv.due_date || !p.payment_date) continue;
@@ -739,18 +739,20 @@ export function buildIntelligenceBundle(input: {
   }
   for (const [cid, row] of clientRisk) {
     if (row.late >= 2) operational.latePayers.push({ id: cid, label: row.name, href: `/clients/${cid}`, meta: `${row.late} late payments` });
-    if (row.overdue >= 2 || row.openUsd >= 5000)
+    if (row.overdue >= 2 || row.openByCurrency.USD >= 5000)
       operational.riskyClients.push({ id: cid, label: row.name, href: `/clients/${cid}`, meta: `${row.overdue} overdue` });
   }
 
   for (const inv of billable) {
-    const approxBilled = toApproxUsd(inv, invoiceBilledPrimary(inv));
-    if (approxBilled >= 5000 && display(inv) !== "paid") {
+    const currency = invoiceCurrency(inv);
+    const balance = remainingBalance(inv);
+    const outstanding = currency === "USD" ? balance.usd : currency === "LBP" ? balance.lbp : null;
+    if (currency === "USD" && outstanding !== null && outstanding >= 5000 && ["sent", "unpaid", "partial", "overdue"].includes(display(inv))) {
       operational.highValueInvoices.push({
         id: inv.id,
         label: invoiceTitle(inv),
         href: `/invoices/${inv.id}`,
-        meta: money(invoiceBilledPrimary(inv), invPrimaryCur(inv))
+        meta: money(outstanding, currency)
       });
     }
     const lastRem = reminderLast.get(inv.id);
@@ -811,7 +813,7 @@ export function buildIntelligenceBundle(input: {
     if (invs.length >= 2 && paidN >= invs.length - 1 && daysSince < 120) segments.push("growing");
     if (row.overdue >= 1 || row.late >= 2) segments.push("at_risk");
     if (daysSince > 120 && paidN === 0) segments.push("inactive");
-    if (row.openUsd >= 8000) segments.push("high_value");
+    if (row.openByCurrency.USD >= 8000) segments.push("high_value");
     if (segments.length) {
       clientSegmentation.push({
         clientId: cid,

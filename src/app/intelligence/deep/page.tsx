@@ -82,7 +82,7 @@ export default async function IntelligenceDeepPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <ListBlock title="Late payers (clients)" items={op.latePayers} empty="No multi-late-payment pattern detected." />
         <ListBlock title="Risky clients" items={op.riskyClients} empty="No high-risk client rollup right now." />
-        <ListBlock title="High-value open invoices (≥ $5k)" items={op.highValueInvoices} empty="No large open invoices flagged." />
+        <ListBlock title="High-value open USD invoices (≥ $5k)" items={op.highValueInvoices} empty="No large open invoices flagged." />
         <ListBlock title="No reminder logged (10d+)" items={op.noFollowUpInvoices} empty="All tracked invoices have a reminder or are new." />
         <ListBlock title="Multiple rejected proofs" items={op.multipleRejectedProofs} empty="No invoices with 2+ rejections." />
         <ListBlock title="Overpaid balances" items={op.overpaidInvoices} empty="No overpayment detected on primary currency." />

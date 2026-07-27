@@ -89,6 +89,35 @@ describe("workflow assistant", () => {
     expect(items.map((item) => item.id)).toContain("partial-detected");
   });
 
+  it("keeps overdue concentration and amount priority in their native currencies", () => {
+    vi.setSystemTime(new Date("2026-05-14T12:00:00.000Z"));
+    const model = buildWorkflowAssistantModel({
+      invoices: [
+        { ...baseInvoice, id: "usd-concentrated", public_token: "secret-usd", client_id: "client-usd", currency: "USD", amount_usd: 1_500, amount_lbp: null, due_date: "2026-05-01" },
+        { ...baseInvoice, id: "usd-other", public_token: "secret-usd-other", client_id: "client-other", currency: "USD", amount_usd: 500, amount_lbp: null, due_date: "2026-05-01" },
+        { ...baseInvoice, id: "lbp-concentrated", public_token: "secret-lbp", client_id: "client-lbp", currency: "LBP", amount_usd: null, amount_lbp: 9_000_000, due_date: "2026-05-01" },
+        { ...baseInvoice, id: "unsupported", public_token: "secret-unsupported", client_id: "client-unsupported", currency: "EUR", amount_usd: 500, amount_lbp: null, due_date: "2026-05-01" }
+      ],
+      events: []
+    });
+
+    const usdConcentration = model.workload.find((item) => item.id === "large-overdue-concentration-usd");
+    const lbpConcentration = model.workload.find((item) => item.id === "overdue-concentration-lbp-not-configured");
+    const usdAction = model.actions.find((item) => item.invoiceId === "usd-concentrated" && item.kind === "send_recovery_reminder");
+    const lbpAction = model.actions.find((item) => item.invoiceId === "lbp-concentrated" && item.kind === "send_recovery_reminder");
+    const unsupportedAction = model.actions.find((item) => item.invoiceId === "unsupported" && item.kind === "send_recovery_reminder");
+
+    expect(usdConcentration?.detail).toContain("overdue USD balance");
+    expect(lbpConcentration?.detail).toContain("No native LBP amount threshold is configured.");
+    expect(model.workload.some((item) => item.detail.includes("USD-equivalent"))).toBe(false);
+    expect(usdAction?.internalSort).toBeGreaterThan(lbpAction?.internalSort || 0);
+    expect(lbpAction?.tier).not.toBe("cleanup");
+    expect(unsupportedAction?.amountLabel).toBe("Amount unavailable (EUR is not configured)");
+    expect(unsupportedAction?.tier).not.toBe("cleanup");
+    expect(JSON.stringify(model)).not.toContain("secret-usd");
+    expect(JSON.stringify(model)).not.toContain("secret-lbp");
+    expect(JSON.stringify(model)).not.toContain("secret-unsupported");
+  });
   it("builds duplicate keys only for active proofs with amount, date, and method", () => {
     expect(
       proofDuplicateKey({
