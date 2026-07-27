@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PremiumEmptyState } from "@/components/PremiumEmptyState";
 import { money } from "@/lib/format";
 import { getWorkspaceContext } from "@/lib/get-workspace";
+import { filterCanonicalWorkspaceInvoices } from "@/lib/canonical-invoices";
 import { requireUser } from "@/lib/supabase/server";
 import { buildWorkspaceMonthlyReports, type WorkspaceReportInvoice } from "@/lib/workspace-monthly-report";
 
@@ -15,13 +16,13 @@ export default async function ReportsPage() {
   const [{ data: invoices }, { data: clients }] = await Promise.all([
     supabase
       .from("invoices")
-      .select("id,status,document_type,currency,amount_usd,amount_lbp,due_date,created_at,payment_proofs(status,amount_usd,amount_lbp,uploaded_at,confirmed_at,reviewed_at,method,voided_at)")
+      .select("id,workspace_id,client_id,status,document_type,currency,amount_usd,amount_lbp,due_date,created_at,clients(workspace_id),payment_proofs(status,amount_usd,amount_lbp,uploaded_at,confirmed_at,reviewed_at,method,voided_at)")
       .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(1500),
     supabase.from("clients").select("created_at").eq("workspace_id", ctx.workspaceId).limit(1500)
   ]);
-  const rows = buildWorkspaceMonthlyReports({ invoices: (invoices || []) as WorkspaceReportInvoice[], clients: clients || [] });
+  const rows = buildWorkspaceMonthlyReports({ invoices: filterCanonicalWorkspaceInvoices(invoices || [], ctx.workspaceId) as WorkspaceReportInvoice[], clients: clients || [] });
 
   return (
     <AppShell role={ctx.role}>

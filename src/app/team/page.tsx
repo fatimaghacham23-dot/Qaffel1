@@ -9,6 +9,7 @@ import { AppShell } from "@/components/AppShell";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { deriveTeamRoster } from "@/lib/team-roster";
+import { TeamSummary } from "@/components/TeamSummary";
 
 export default async function TeamPage() {
   const { supabase } = await requireUser();
@@ -34,8 +35,8 @@ export default async function TeamPage() {
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-ink">
-            People <span className="ml-2 text-sm font-normal text-slate-400">{roster.totalPeople}</span>
-            <span className="ml-3 text-xs font-normal text-slate-500">Additional members: {roster.additionalMemberCount} Â· Pending invitations: {roster.pendingInvitationCount}</span>
+            People <span className="ms-2 text-sm font-normal text-slate-400">{roster.totalPeople}</span>
+            <TeamSummary additionalMemberCount={roster.additionalMemberCount} pendingInvitationCount={roster.pendingInvitationCount} />
           </h2>
         </div>
         <TeamMemberList

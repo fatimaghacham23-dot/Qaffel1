@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { getAssignmentMembers, getAssignmentsForTargets } from "@/lib/assignment-data";
 import { documentStatus, isQuoteDocument } from "@/lib/documents";
 import { getWorkspaceContext } from "@/lib/get-workspace";
+import { filterCanonicalWorkspaceInvoices } from "@/lib/canonical-invoices";
 import { getDisplayInvoiceStatus } from "@/lib/status";
 import { requireUser } from "@/lib/supabase/server";
 import { invoiceStatuses } from "@/lib/types";
@@ -20,21 +21,22 @@ export default async function InvoicesPage() {
   const [{ data: invoices }, { data: activeMethods }] = await Promise.all([
     supabase
       .from("invoices")
-      .select("*, clients(name), payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at)")
+      .select("*, clients(name,workspace_id), payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at)")
       .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false }),
     supabase.from("payment_methods").select("id").eq("workspace_id", ctx.workspaceId).eq("is_active", true).limit(1)
   ]);
 
+  const canonicalInvoices = filterCanonicalWorkspaceInvoices(invoices || [], ctx.workspaceId);
   const assignmentMembers = await getAssignmentMembers(supabase, ctx.workspaceId);
   const assignmentsByInvoice = await getAssignmentsForTargets({
     supabase,
     workspaceId: ctx.workspaceId,
     targetType: "invoice",
-    targetIds: (invoices || []).map((invoice) => invoice.id),
+    targetIds: canonicalInvoices.map((invoice) => invoice.id),
     members: assignmentMembers
   });
-  const safeInvoices = (invoices || []).map((invoice) => ({
+  const safeInvoices = canonicalInvoices.map((invoice) => ({
     ...invoice,
     assignments: assignmentsByInvoice.get(invoice.id) || []
   })) as InvoiceTableInvoice[];

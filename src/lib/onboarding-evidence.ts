@@ -1,6 +1,7 @@
 import "server-only";
 
 import { dashboardScope } from "@/lib/dashboard-scope";
+import { filterCanonicalActiveWorkspaceInvoices } from "@/lib/canonical-invoices";
 import type { WorkspaceContext } from "@/lib/get-workspace";
 import type { createClient } from "@/lib/supabase/server";
 
@@ -34,14 +35,15 @@ export async function getWorkspaceOnboardingEvidence(supabase: ServerClient, ctx
   const [profile, clients, invoices, methods, shares, members, invitations] = await Promise.all([
     supabase.from("profiles").select("business_name,phone,support_email,logo_storage_path").eq("id", ctx.userId).maybeSingle(),
     supabase.from("clients").select("id", { count: "exact", head: true }).eq(...scope.workspace),
-    supabase.from("invoices").select("id,document_type,status,public_token,revoked_at,valid_until").eq(...scope.workspace).limit(200),
+    supabase.from("invoices").select("id,workspace_id,client_id,document_type,status,public_token,revoked_at,valid_until,clients(workspace_id)").eq(...scope.workspace),
     supabase.from("payment_methods").select("id", { count: "exact", head: true }).eq(...scope.workspace).eq("is_active", true),
     supabase.from("invoice_events").select("id", { count: "exact", head: true }).eq(...scope.workspace).in("event_type", ["reminder_copied", "payment_link_copied", "payment_link_opened"]),
     supabase.from("workspace_members").select("user_id", { count: "exact", head: true }).eq(...scope.workspace).eq("status", "active").neq("user_id", ctx.userId),
     supabase.from("workspace_invitations").select("id", { count: "exact", head: true }).eq(...scope.workspace).is("accepted_at", null)
   ]);
-  const rows = invoices.data || [];
-  const realInvoiceCount = rows.filter((row) => row.document_type !== "quote").length;
-  const validPaymentTokenCount = rows.filter((row) => row.document_type !== "quote" && Boolean(row.public_token) && !row.revoked_at && (!row.valid_until || row.valid_until >= now) && row.status !== "rejected").length;
+  if (invoices.error) throw new Error("Workspace onboarding invoice evidence could not be loaded.");
+  const rows = filterCanonicalActiveWorkspaceInvoices(invoices.data || [], ctx.workspaceId);
+  const realInvoiceCount = rows.length;
+  const validPaymentTokenCount = rows.filter((row) => Boolean(row.public_token) && !row.revoked_at && (!row.valid_until || row.valid_until >= now)).length;
   return deriveOnboardingEvidence({ clientCount: clients.count || 0, realInvoiceCount, businessName: profile.data?.business_name, phone: profile.data?.phone, supportEmail: profile.data?.support_email, hasVisualBranding: Boolean(profile.data?.logo_storage_path), activePaymentMethodCount: methods.count || 0, validPaymentTokenCount, shareEventCount: shares.count || 0, additionalMemberCount: members.count || 0, pendingInvitationCount: invitations.count || 0 });
 }

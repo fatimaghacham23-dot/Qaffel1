@@ -65,7 +65,7 @@ export type DashboardInvoice = CollectionInvoice & {
   invoice_number?: string | null;
   valid_until?: string | null;
   public_token?: string | null;
-  clients?: { name?: string | null } | null;
+  clients?: { name?: string | null; workspace_id?: string | null } | null;
 };
 
 export type DashboardPayment = {
@@ -85,7 +85,7 @@ export type DashboardPayment = {
     invoice_number?: string | null;
     currency?: string | null;
     workspace_id?: string | null;
-    clients?: { name?: string | null } | null;
+    clients?: { name?: string | null; workspace_id?: string | null } | null;
   } | null;
 };
 

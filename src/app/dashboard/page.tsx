@@ -20,6 +20,7 @@ import { getOutstandingBalance, isAcceptedNonVoidedPayment, isOutstandingInvoice
 import { money } from "@/lib/format";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { dashboardScope } from "@/lib/dashboard-scope";
+import { filterCanonicalWorkspaceInvoices } from "@/lib/canonical-invoices";
 import { notificationPreview } from "@/lib/notifications";
 import { getWorkspaceNotifications } from "@/lib/notifications-server";
 import { getWorkspaceOnboardingEvidence } from "@/lib/onboarding-evidence";
@@ -102,7 +103,7 @@ export default async function DashboardPage() {
   const invoicePromise = plan.invoices
     ? supabase
         .from("invoices")
-        .select("id,title,invoice_number,status,document_type,currency,amount_usd,amount_lbp,due_date,valid_until,public_token,created_at,clients(name),payment_proofs(status,amount_usd,amount_lbp,voided_at)", { count: "exact" })
+        .select("id,title,invoice_number,status,document_type,currency,amount_usd,amount_lbp,due_date,valid_until,public_token,created_at,workspace_id,client_id,clients(name,workspace_id),payment_proofs(status,amount_usd,amount_lbp,voided_at)", { count: "exact" })
         .eq(...scope.workspace)
         .order("created_at", { ascending: false })
         .limit(DASHBOARD_INVOICE_LIMIT)
@@ -152,17 +153,18 @@ export default async function DashboardPage() {
         .order("due_at", { ascending: true, nullsFirst: false })
         .limit(DASHBOARD_ASSIGNMENT_LIMIT)
     : emptyResult<DashboardAssignment>();
+  const onboardingEvidencePromise = getWorkspaceOnboardingEvidence(supabase, ctx);
   const [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult, eventResult] = await Promise.all([
     invoicePromise, pendingPromise, pendingCountPromise, acceptedPromise, rejectedPromise, assignmentQuery, getWorkspaceRecentActivity(supabase, ctx, 5)
   ]) as unknown as [Result<DashboardInvoice>, Result<DashboardPayment>, Result<never>, Result<DashboardPayment>, Result<DashboardPayment>, Result<DashboardAssignment>, Awaited<ReturnType<typeof getWorkspaceRecentActivity>>];
 
-  const invoices = invoiceResult.data || [];
+  const invoices = filterCanonicalWorkspaceInvoices(invoiceResult.data || [], ctx.workspaceId);
   const pending = pendingResult.data || [];
   const payments = [...pending, ...(acceptedResult.data || []), ...(rejectedResult.data || [])];
   const metrics = dashboardMetrics({ invoices, payments: acceptedResult.data || [], now });
-  const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx)).actionItems;
+  const onboardingEvidence = await onboardingEvidencePromise;
+  const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx, onboardingEvidence)).actionItems;
   const recentActivity = eventResult;
-  const onboardingEvidence = await getWorkspaceOnboardingEvidence(supabase, ctx);
   const onboardingState = deriveDashboardOnboardingState({ onboardingEvidence, role: ctx.role, operationalAttention: attention.map((item) => ({ id: item.id, title: item.title, href: item.destinationUrl, label: item.actionLabel || "Open" })) });
   const cashFlow = cashFlowPreview({ invoices, payments: acceptedResult.data || [], now });
   const collectedLabel = groupedMoney(metrics.collected);
