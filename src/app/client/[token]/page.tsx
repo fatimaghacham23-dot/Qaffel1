@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Activity, ExternalLink, FileText, MessageCircle } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -15,6 +16,13 @@ import { isPortalDocumentsEmpty } from "@/lib/portal-documents";
 import type { InvoiceStatus } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
+import { buildClientPortalUrl } from "@/lib/urls";
+
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const canonicalUrl = buildClientPortalUrl(token);
+  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl }, robots: { index: false, follow: false } };
+}
 
 function PortalFlag({ tone, label }: { tone: "good" | "warn" | "danger" | "info" | "neutral"; label: string }) {
   const tones = {

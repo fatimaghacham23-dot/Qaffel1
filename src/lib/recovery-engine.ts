@@ -1,3 +1,70 @@
+
+import {
+  deriveRecoveryEngineCurrencyResult,
+  RECOVERY_USD_AMOUNT_PRIORITY_THRESHOLD,
+  type RecoveryEngineCurrencyCandidateFact,
+  type RecoveryEngineCurrencyResult
+} from "@/lib/recovery-engine-currency-summary";
+
+export type RecoveryEngineCurrencyModelInput = {
+  workspaceId: string;
+  invoices: RecoveryInvoiceRow[];
+  events: InvoiceEventRow[];
+  nowMs: number;
+};
+
+export function deriveRecoveryEngineCurrencyModel(input: RecoveryEngineCurrencyModelInput): RecoveryEngineCurrencyResult {
+  const invoices = input.invoices.filter((invoice) => invoice.workspace_id === input.workspaceId);
+  const statsMap = computeClientPaymentStats(invoices);
+  const facts: RecoveryEngineCurrencyCandidateFact[] = [];
+
+  for (const invoice of invoices) {
+    if (invoice.document_type && String(invoice.document_type).toLowerCase() === "quote") continue;
+    const proofs = toMinimalProofs(invoice.payment_proofs);
+    const status = reconcileInvoiceStatus(invoice, proofs);
+    const remaining = getRemainingBalance(invoice, proofs);
+    const due = invoice.due_date ? new Date(invoice.due_date + "T12:00:00") : null;
+    const daysOverdue = due && Number.isFinite(due.getTime()) ? Math.max(0, Math.floor((input.nowMs - due.getTime()) / 86400000)) : 0;
+    if (daysOverdue <= 0 || status === "paid" || status === "draft" || status === "rejected") continue;
+    const currency = (invoice.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
+    const outstanding = currency === "USD" ? remaining.usd : remaining.lbp;
+    if (outstanding <= 0) continue;
+
+    const invoiceEvents = input.events.filter((event) => event.invoice_id === invoice.id);
+    const reminders = invoiceEvents.filter((event) => event.event_type === "reminder_copied");
+    const lastReminder = reminders.reduce((best, event) => !best || parseEventTime(event.created_at) > parseEventTime(best.created_at) ? event : best, null as InvoiceEventRow | null);
+    const payments = invoiceEvents.filter((event) => ["proof_accepted", "manual_payment", "payment_received", "payment_confirmed", "payment_recorded"].includes(event.event_type));
+    const lastPayment = payments.reduce((best, event) => !best || parseEventTime(event.created_at) > parseEventTime(best.created_at) ? event : best, null as InvoiceEventRow | null);
+    const reminderCopiedCount60d = reminders.filter((event) => {
+      const timestamp = parseEventTime(event.created_at);
+      return timestamp > 0 && input.nowMs - timestamp <= 60 * 86400000;
+    }).length;
+    const lastReminderAt = lastReminder?.created_at ?? null;
+    const lastReminderStage = lastReminder?.metadata && typeof lastReminder.metadata === "object" && "stage" in lastReminder.metadata ? String(lastReminder.metadata.stage || "") || null : null;
+    const lastView = invoiceEvents.filter((event) => event.event_type === "receipt_viewed").reduce((best, event) => !best || parseEventTime(event.created_at) > parseEventTime(best.created_at) ? event : best, null as InvoiceEventRow | null);
+    const viewedAfterReminder = Boolean(lastReminderAt && lastView && parseEventTime(lastView.created_at) >= parseEventTime(lastReminderAt));
+    const depositRequest = getDepositRequest(invoice);
+    const depositStatus = getDepositStatus(invoice, proofs);
+    const clientId = invoice.client_id || "";
+    const stats = clientId ? statsMap.get(clientId) : undefined;
+    const isRepeatClient = invoices.some((other) => other.id !== invoice.id && other.client_id === clientId && reconcileInvoiceStatus(other, toMinimalProofs(other.payment_proofs)) === "paid");
+    const validUntil = invoice.valid_until ? parseEventTime(invoice.valid_until + "T12:00:00") : 0;
+    const linkExpired = Boolean(invoice.valid_until) && parseEventTime(invoice.valid_until + "T23:59:59") < input.nowMs;
+    facts.push({
+      candidateKey: invoice.id, currency, outstanding, daysOverdue,
+      workspaceMatched: invoice.workspace_id === input.workspaceId, eligibleForRecovery: true,
+      amountPriorityRatio: currency === "USD" ? outstanding / RECOVERY_USD_AMOUNT_PRIORITY_THRESHOLD : null,
+      lastReminderAt, lastReminderStage, lastPaymentAt: lastPayment?.created_at ?? null, reminderCopiedCount60d,
+      viewedAfterReminder, partialPaymentsObserved: status === "partial",
+      depositSatisfied: Boolean(depositRequest && depositStatus && depositStatus.label !== "Not paid"),
+      isRepeatClient, avgDaysToPay: stats?.avgDaysToPay ?? null, paidCount: stats?.paidCount ?? 0,
+      partialInvoiceCount: stats?.partialInvoiceCount ?? 0, pendingProof: proofs.some((proof) => proof.status.toLowerCase() === "pending"),
+      hasValidity: Boolean(invoice.valid_until), linkExpired,
+      daysUntilLinkExpiry: validUntil > input.nowMs ? Math.max(0, Math.floor((validUntil - input.nowMs) / 86400000)) : null
+    });
+  }
+  return deriveRecoveryEngineCurrencyResult({ candidates: facts, nowMs: input.nowMs });
+}
 import type { InvoiceStatus } from "@/lib/types";
 import { finiteN } from "@/lib/safe-metrics";
 import { getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
@@ -35,6 +102,7 @@ export type InvoiceEventRow = {
 
 /** Invoice row shape used by recovery (matches Supabase select + nested proofs). */
 export type RecoveryInvoiceRow = {
+  workspace_id?: string | null;
   id: string;
   client_id?: string | null;
   status: InvoiceStatus;

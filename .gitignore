@@ -8,3 +8,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 tsconfig.tsbuildinfo
+.artifacts/
+.release/
+output/
+playwright-report/
+test-results/
+
+/tmp/

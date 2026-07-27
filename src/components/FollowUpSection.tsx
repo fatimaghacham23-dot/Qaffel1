@@ -29,6 +29,7 @@ interface FollowUpSectionProps {
   } | null;
   events?: any[];
   proofs?: any[];
+  paymentUrl: string;
 }
 
 function reminderAssistTone(item: ReminderAssistItem) {
@@ -44,14 +45,12 @@ export function FollowUpSection({
   remainingBalance,
   lastReminder,
   events = [],
-  proofs = []
+  proofs = [],
+  paymentUrl
 }: FollowUpSectionProps) {
   const [isRecording, setIsRecording] = useState(false);
 
-  const publicUrl = useMemo(() => {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    return `${baseUrl}/pay/${invoice.public_token}`;
-  }, [invoice.public_token]);
+  const publicUrl = paymentUrl;
 
   const displayStatus = getDisplayInvoiceStatus(invoice);
   const depositRequest = useMemo(() => getDepositRequest(invoice), [invoice]);
@@ -242,7 +241,7 @@ export function FollowUpSection({
             title: invoice.title,
             remainingPrimary: remainingBalance.primaryBalance,
             primaryCurrency: (remainingBalance.primaryCurrency || "USD") as "USD" | "LBP",
-            publicToken: invoice.public_token
+            publicUrl: paymentUrl
           })}
         />
       )}

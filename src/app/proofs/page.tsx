@@ -6,6 +6,7 @@ import { getAssignmentMembers, getAssignmentsForTargets } from "@/lib/assignment
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { hasPermission } from "@/lib/permissions";
 import { requireUser } from "@/lib/supabase/server";
+import { buildEligibleReceiptUrl } from "@/lib/urls";
 
 export default async function ProofsPage() {
   const { supabase } = await requireUser();
@@ -30,7 +31,8 @@ export default async function ProofsPage() {
     (proofs || []).map(async (proof) => {
       const withAssignments = {
         ...proof,
-        assignments: assignmentsByProof.get(proof.id) || []
+        assignments: assignmentsByProof.get(proof.id) || [],
+        receipt_url: buildEligibleReceiptUrl(proof)
       };
       if (!proof.image_url) return withAssignments;
       if (proof.image_url.startsWith("http")) return withAssignments;
@@ -50,7 +52,7 @@ export default async function ProofsPage() {
   const voidedCount = proofsWithSignedUrls.filter((proof) => proof.status === "voided").length;
 
   return (
-    <AppShell>
+    <AppShell role={ctx.role}>
       <SettingsPageHeader
         title="Payment proofs"
         subtitle="Review payment proofs, accept full or partial payments, and track invoice balances."

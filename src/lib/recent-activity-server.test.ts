@@ -1,0 +1,2 @@
+import {describe,expect,it} from "vitest";import{deriveRecentActivity}from"@/lib/recent-activity";
+describe("recent activity loader contract",()=>{it("keeps output workspace-safe and token-free after scoped facts",()=>{const items=deriveRecentActivity({invoiceCreations:[{id:"a",occurredAt:"2026-07-20T00:00:00Z",invoiceId:"invoice",invoiceNumber:"INV-1",documentType:"invoice"}],limit:5});expect(items[0]).toMatchObject({id:"invoice_created:a",href:"/invoices/invoice"});expect(JSON.stringify(items)).not.toMatch(/token|path|email/i)});});

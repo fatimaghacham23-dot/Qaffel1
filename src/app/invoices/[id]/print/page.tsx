@@ -10,6 +10,8 @@ import { PrintButton } from "@/components/PrintButton";
 import { BrandedPublicSurface } from "@/components/brand/BrandedPublicSurface";
 import { BusinessLogoOrMonogram } from "@/components/brand/BusinessLogoOrMonogram";
 import { normalizeDocumentTheme, sanitizeHexColor, signBrandLogoUrl } from "@/lib/brand";
+import { buildReceiptUrl } from "@/lib/urls";
+import { buildPaymentUrl } from "@/lib/urls";
 
 export default async function PrintInvoicePage({
   params
@@ -50,8 +52,7 @@ export default async function PrintInvoicePage({
     return notFound();
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const paymentLink = `${appUrl}/pay/${invoice.public_token}`;
+  const paymentLink = buildPaymentUrl(invoice.public_token);
   const businessName = profile?.business_name || profile?.full_name || documentNounTitle(invoice);
   const logoUrl = await signBrandLogoUrl(supabase, profile?.logo_storage_path ?? null);
   const brandColor = sanitizeHexColor(profile?.brand_color ?? undefined, "#116466");
@@ -63,7 +64,7 @@ export default async function PrintInvoicePage({
   const latestReceiptToken = proofRows
     .filter((p) => p.receipt_token)
     .sort((a, b) => new Date(b.confirmed_at || 0).getTime() - new Date(a.confirmed_at || 0).getTime())[0]?.receipt_token;
-  const receiptLink = latestReceiptToken ? `${appUrl}/receipt/${latestReceiptToken}` : null;
+  const receiptLink = latestReceiptToken ? buildReceiptUrl(latestReceiptToken) : null;
 
   const isQuote = isQuoteDocument(invoice);
   const nounTitle = documentNounTitle(invoice);
@@ -73,9 +74,9 @@ export default async function PrintInvoicePage({
   const isExpired = invoice.valid_until && new Date(invoice.valid_until) < new Date() && (isQuote ? displayStatus === "expired" : invoice.status !== "paid");
 
   return (
-    <BrandedPublicSurface theme={docTheme} brandColor={brandColor} brandAccent={brandAccent} className="print-doc-root public-brand-surface min-h-screen bg-white p-4 md:p-8">
+    <BrandedPublicSurface theme={docTheme} brandColor={brandColor} brandAccent={brandAccent} className="print-doc-root public-brand-surface min-h-screen min-w-0 bg-white p-4 sm:p-6 md:p-8">
       {/* Print Controls - Hidden during print */}
-      <div className="mb-8 flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
+      <div className="mb-8 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <Link href={`/invoices/${id}`} className="text-sm font-semibold hover:underline" style={{ color: "var(--brand-primary, #116466)" }}>
           &larr; Back to {nounTitle.toLowerCase()}
         </Link>
@@ -192,7 +193,7 @@ export default async function PrintInvoicePage({
         )}
 
         {/* Document Item Table */}
-        <div className="mb-10 overflow-hidden rounded-lg border border-slate-200">
+        <div className="mb-10 overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>

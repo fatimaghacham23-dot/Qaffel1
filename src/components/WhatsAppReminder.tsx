@@ -1,128 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { paymentRequestMessage, whatsAppHref } from "@/lib/whatsapp";
 
-interface WhatsAppReminderProps {
-  clientName: string | null;
-  clientPhone: string | null;
-  invoiceNumber: string | null;
-  amountUsd: number | null;
-  amountLbp: number | null;
-  publicToken: string;
-  invoiceStatus: string;
-}
+interface WhatsAppReminderProps { clientName: string | null; clientPhone: string | null; invoiceNumber: string | null; amountUsd: number | null; amountLbp: number | null; canonicalPaymentUrl: string | null; invoiceStatus: string; }
 
-export function WhatsAppReminder({
-  clientName,
-  clientPhone,
-  invoiceNumber,
-  amountUsd,
-  amountLbp,
-  publicToken,
-  invoiceStatus,
-}: WhatsAppReminderProps) {
-  const [isCopied, setIsCopied] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  const allowedStatuses = ["unpaid", "overdue", "partial", "sent"];
-  if (!allowedStatuses.includes(invoiceStatus)) {
-    return null;
-  }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const paymentLink = `${appUrl}/pay/${publicToken}`;
-  
-  const formattedAmount = amountUsd 
-    ? `$${amountUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : amountLbp 
-      ? `LBP ${amountLbp.toLocaleString()}`
-      : "pending amount";
-
-  const message = clientName
-    ? `Hi ${clientName}, small reminder that invoice ${invoiceNumber || ""} for ${formattedAmount} is still pending. You can pay here: ${paymentLink}`
-    : `Hi, small reminder that invoice ${invoiceNumber || ""} for ${formattedAmount} is still pending. You can pay here: ${paymentLink}`;
-
-  const normalizePhone = (phone: string) => {
-    let clean = phone.replace(/[\s\-\+\(\)]/g, "");
-    
-    // Lebanese number formats: 03, 70, 71, 76, 78, 79, 81, etc.
-    if (/^(03|70|71|76|78|79|81|82)\d{6}$/.test(clean)) {
-      return `961${clean.substring(clean.startsWith('0') ? 1 : 0)}`;
-    }
-    // Handle 03 case specifically if not covered above
-    if (clean.startsWith("03") && clean.length === 8) {
-      return `9613${clean.substring(2)}`;
-    }
-    
-    return clean;
-  };
-
-  const handleCopyMessage = () => {
-    navigator.clipboard.writeText(message);
-    toast.success("Reminder message copied to clipboard");
-    setIsCopied(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(paymentLink);
-    toast.success("Payment link copied to clipboard");
-  };
-
-  const whatsappUrl = clientPhone 
-    ? `https://wa.me/${normalizePhone(clientPhone)}?text=${encodeURIComponent(message)}`
-    : null;
-
-  return (
-    <div className="panel mt-4">
-      <h2 className="text-lg font-bold text-ink">WhatsApp Reminder</h2>
-      
-      {clientPhone ? (
-        <div className="mt-4">
-          <a
-            href={whatsappUrl!}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary inline-flex items-center gap-2"
-          >
-            Open WhatsApp reminder
-          </a>
-          <p className="mt-2 text-xs text-slate-500">
-            This will open WhatsApp with a prefilled message for {clientPhone}.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4">
-          <p className="text-sm text-amber-600 font-medium">No client phone number saved.</p>
-          <p className="text-sm text-slate-600 mt-1">Copy this message and send it manually:</p>
-          <div className="mt-2 p-3 bg-slate-50 rounded-md text-sm text-slate-700 border border-slate-100">
-            {message}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          onClick={handleCopyMessage}
-          className="btn btn-secondary text-xs"
-        >
-          {isCopied ? "Copied!" : "Copy reminder message"}
-        </button>
-        <button
-          onClick={handleCopyLink}
-          className="btn btn-secondary text-xs"
-        >
-          Copy payment link
-        </button>
-      </div>
-    </div>
-  );
+export function WhatsAppReminder(props: WhatsAppReminderProps) {
+  const [copied, setCopied] = useState(false);
+  if (!["unpaid", "overdue", "partial", "sent"].includes(props.invoiceStatus)) return null;
+  const paymentLink = props.canonicalPaymentUrl;
+  const amount = props.amountUsd ? `$${props.amountUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : props.amountLbp ? `LBP ${props.amountLbp.toLocaleString()}` : "the invoice amount";
+  const message = paymentRequestMessage({ clientName: props.clientName, invoiceNumber: props.invoiceNumber, amount, paymentLink: paymentLink || "", reminder: true });
+  const href = whatsAppHref(props.clientPhone, message);
+  const copy = async (value: string, label: string) => { await navigator.clipboard.writeText(value); setCopied(true); toast.success(label); window.setTimeout(() => setCopied(false), 1800); };
+  return <div className="panel mt-4"><h2 className="text-lg font-bold text-ink">WhatsApp reminder</h2><p className="mt-2 text-sm text-slate-600">Prepare the message, then send it yourself in WhatsApp. Qaffel does not mark it as delivered.</p>{href ? <a href={href} target="_blank" rel="noopener noreferrer" className="btn btn-primary mt-4">Open WhatsApp</a> : <p className="mt-4 text-sm font-medium text-amber-700">No client phone number is saved. Copy the message and choose a recipient manually.</p>}<div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => copy(message, "Reminder message copied")} className="btn btn-secondary text-xs">{copied ? "Copied" : "Copy reminder message"}</button>{paymentLink ? <button type="button" onClick={() => copy(paymentLink, "Payment link copied")} className="btn btn-secondary text-xs">Copy payment link</button> : null}</div></div>;
 }

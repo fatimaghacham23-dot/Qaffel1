@@ -1,10 +1,5 @@
-import { AppShell } from "@/components/AppShell";
-import { ListPageSkeleton } from "@/components/ListPageSkeleton";
+import { AuthenticatedRouteLoading } from "@/components/AuthenticatedRouteLoading";
 
-export default function DashboardLoading() {
-  return (
-    <AppShell>
-      <ListPageSkeleton rows={8} />
-    </AppShell>
-  );
+export default function Loading() {
+  return <AuthenticatedRouteLoading rows={5} />;
 }

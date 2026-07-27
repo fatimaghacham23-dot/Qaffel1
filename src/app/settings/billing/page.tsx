@@ -9,7 +9,8 @@ import {
 } from "@/app/billing-actions";
 import { AppShell } from "@/components/AppShell";
 import { OperationsChecklist } from "@/components/OperationsChecklist";
-import { SettingsPageHeader } from "@/components/SettingsPageHeader";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   WORKSPACE_PLAN_DEFINITIONS,
@@ -221,9 +222,11 @@ export default async function BillingSettingsPage() {
 
   return (
     <AppShell>
-      <SettingsPageHeader
+      <PageContainer width="default">
+      <PageHeader
         title="Workspace billing"
-        subtitle="Subscription state, billing authority, seats, and operational continuity for this workspace."
+        breadcrumbs={[{ label: "Settings" }, { label: "Workspace billing" }]}
+        description="Subscription state, billing authority, seats, and operational continuity for this workspace."
       />
 
       <div className="mb-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
@@ -588,6 +591,7 @@ export default async function BillingSettingsPage() {
           </section>
         </aside>
       </div>
+      </PageContainer>
     </AppShell>
   );
 }

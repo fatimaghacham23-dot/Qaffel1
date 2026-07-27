@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { CommandCenter } from "@/components/CommandCenter";
+import { RouteTransitionIndicator } from "@/components/RouteTransitionIndicator";
 import { createClient } from "@/lib/supabase/server";
+import { getCanonicalAppUrl } from "@/lib/urls";
+import { NotificationBell } from "@/components/NotificationBell";
+import { getWorkspaceContext } from "@/lib/get-workspace";
+import { getWorkspaceNotifications } from "@/lib/notifications-server";
+import { notificationPreview } from "@/lib/notifications";
 
 export const metadata: Metadata = {
   title: "Qaffel",
-  description: "Payment tracking for Lebanese freelancers and small businesses"
+  description: "Payment tracking for Lebanese freelancers and small businesses",
+  metadataBase: new URL(getCanonicalAppUrl())
 };
 
 export default async function RootLayout({
@@ -16,19 +24,24 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+  const publicLang = requestHeaders.get("x-qaffel-public-lang") === "ar" ? "ar" : "en";
   const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
+  const notificationData = user ? await (async () => { try { const context = await getWorkspaceContext(); return notificationPreview(await getWorkspaceNotifications(supabase, context)); } catch { return notificationPreview([]); } })() : null;
+
   return (
-    <html lang="en">
+    <html lang={publicLang} dir={publicLang === "ar" ? "rtl" : "ltr"}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-[100dvh] bg-[var(--q-bg)] text-ink antialiased">
+        <RouteTransitionIndicator />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-ink focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-cedar focus:ring-offset-2"
@@ -45,6 +58,7 @@ export default async function RootLayout({
               Qaffel
             </Link>
             <nav className="flex items-center gap-1 text-sm">
+              {notificationData ? <NotificationBell items={notificationData.items} actionCount={notificationData.actionCount} /> : null}
               <Link className="rounded-xl px-3.5 py-2 font-semibold text-slate-600 transition-[background-color,color] duration-q hover:bg-slate-100/70 hover:text-ink" href="/dashboard">
                 Dashboard
               </Link>

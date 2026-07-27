@@ -1,0 +1,60 @@
+name: Production release gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Reviewed full commit SHA to package
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package-reviewed-release:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_SOLO: ${{ vars.STRIPE_PRICE_SOLO }}
+      STRIPE_PRICE_TEAM: ${{ vars.STRIPE_PRICE_TEAM }}
+      STRIPE_PRICE_BUSINESS: ${{ vars.STRIPE_PRICE_BUSINESS }}
+      STRIPE_PRICE_ENTERPRISE: ${{ vars.STRIPE_PRICE_ENTERPRISE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+      - name: Verify exact release commit
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ inputs.release_sha }}"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run security:audit
+      - run: npm run security:audit:all
+        continue-on-error: true
+      - run: npm run release:check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qaffel-release-${{ inputs.release_sha }}
+          path: |
+            .next
+            .release/release-manifest.json
+          include-hidden-files: true
+          retention-days: 30
+      - name: Deployment boundary
+        run: |
+          echo "Validated artifact packaged."
+          echo "Hosting-provider deployment is intentionally not configured until the provider, project, rollback owner, and protected credentials are documented."

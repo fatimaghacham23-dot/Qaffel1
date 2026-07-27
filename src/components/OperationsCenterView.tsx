@@ -138,7 +138,20 @@ function BucketIcon({ bucket }: { bucket: AlertBucket }) {
   }
 }
 
-function AnimatedMoney({ value, currency }: { value: number; currency: "USD" | "LBP" }) {
+function formatOperationsMoney(value: number, currency: string) {
+  const safe = finiteN(value);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: currency === "LBP" ? 0 : 2
+    }).format(safe);
+  } catch {
+    return `${safe.toLocaleString("en-US")} ${currency}`;
+  }
+}
+
+function AnimatedMoney({ value, currency }: { value: number; currency: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const safe = finiteN(value);
   useEffect(() => {
@@ -148,12 +161,12 @@ function AnimatedMoney({ value, currency }: { value: number; currency: "USD" | "
       duration: 0.75,
       ease: "circOut",
       onUpdate: (v) => {
-        el.textContent = money(finiteN(v), currency);
+        el.textContent = formatOperationsMoney(finiteN(v), currency);
       }
     });
     return () => c.stop();
   }, [safe, currency]);
-  return <span ref={ref}>{money(0, currency)}</span>;
+  return <span ref={ref}>{formatOperationsMoney(0, currency)}</span>;
 }
 
 function AnimatedScore({ value }: { value: number }) {
@@ -641,31 +654,55 @@ export function OperationsCenterView({
           <div className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-slate-50/90 to-white p-3 shadow-sm backdrop-blur-[2px] sm:p-4">
             <div className="flex items-center gap-2">
               <Timer className="h-4 w-4 text-slate-500" aria-hidden />
-              <h3 className="text-sm font-bold text-ink">Financial snapshot · cash (USD)</h3>
+              <h3 className="text-sm font-bold text-ink">Financial snapshot</h3>
             </div>
-            <dl className="mt-3 grid gap-2.5 text-sm">
-              <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
-                <dt className="text-slate-600">Cash arriving this week</dt>
-                <dd className="font-bold text-ink">
-                  <AnimatedMoney value={model.cashFlow.expectedIncomingWeekUsd} currency="USD" />
-                </dd>
+            {model.currencySummary.currencySummaries.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600">No currency-specific operations data is available yet.</p>
+            ) : (
+              <div className="mt-3 space-y-4">
+                {model.currencySummary.currencySummaries.map((summary) => (
+                  <section key={summary.currency} aria-labelledby={`ops-money-${summary.currency}`} className="rounded-lg border border-slate-100 bg-white/70 p-3">
+                    <h4 id={`ops-money-${summary.currency}`} className="text-sm font-semibold text-ink">Operations — {summary.currency}</h4>
+                    <dl className="mt-2 grid gap-2.5 text-sm">
+                      <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2">
+                        <dt className="text-slate-600">Expected incoming this week</dt>
+                        <dd className="break-all text-right font-bold text-ink"><AnimatedMoney value={summary.expectedIncomingWeek} currency={summary.currency} /></dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2">
+                        <dt className="text-slate-600">Overdue recoverable</dt>
+                        <dd className="break-all text-right font-bold text-red-700"><AnimatedMoney value={summary.overdueRecoverable} currency={summary.currency} /></dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2">
+                        <dt className="text-slate-600">Unpaid deposits</dt>
+                        <dd className="break-all text-right font-bold text-amber-800"><AnimatedMoney value={summary.unpaidDeposits} currency={summary.currency} /></dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2">
+                        <dt className="text-slate-600">Billed amount</dt>
+                        <dd className="break-all text-right font-semibold text-ink"><AnimatedMoney value={summary.billed} currency={summary.currency} /></dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2">
+                        <dt className="text-slate-600">Open balance</dt>
+                        <dd className="break-all text-right font-semibold text-ink"><AnimatedMoney value={summary.openBalance} currency={summary.currency} /></dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <dt className="text-slate-600">Balance health</dt>
+                        <dd className="text-right font-semibold text-ink">
+                          <span>{summary.balancePoints}/20 points</span>
+                          <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                            {summary.balanceRatio === null ? "Ratio unavailable: no billed amount." : `${Math.round(summary.balanceRatio * 100)}% open of billed`}
+                          </span>
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+                ))}
               </div>
-              <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
-                <dt className="text-slate-600">Revenue at risk (overdue)</dt>
-                <dd className="font-bold text-red-700">
-                  <AnimatedMoney value={model.cashFlow.overdueRecoverableUsd} currency="USD" />
-                </dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
-                <dt className="text-slate-600">Deposit still needed (est.)</dt>
-                <dd className="font-bold text-amber-800">
-                  <AnimatedMoney value={model.cashFlow.unpaidDepositsUsd} currency="USD" />
-                </dd>
-              </div>
+            )}
+            <dl className="mt-4 border-t border-slate-100 pt-3 text-sm">
               <div>
-                <dt className="font-semibold text-slate-800">{model.cashFlow.velocityLabel}</dt>
-                {model.cashFlow.velocityDetail ? (
-                  <dd className="mt-1 text-xs text-slate-600">{model.cashFlow.velocityDetail}</dd>
+                <dt className="font-semibold text-slate-800">{model.currencySummary.shared.velocityLabel}</dt>
+                {model.currencySummary.shared.velocityDetail ? (
+                  <dd className="mt-1 text-xs text-slate-600">{model.currencySummary.shared.velocityDetail}</dd>
                 ) : (
                   <dd className="mt-1 text-xs text-slate-500">Add more accepted payments to compare week-over-week velocity.</dd>
                 )}

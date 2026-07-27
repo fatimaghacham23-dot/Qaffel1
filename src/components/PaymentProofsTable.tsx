@@ -54,6 +54,7 @@ export type PaymentProofTableItem = {
   voided_at?: string | null;
   void_reason?: string | null;
   receipt_token?: string | null;
+  receipt_url?: string | null;
   ai_review_json?: unknown;
   ai_review_summary?: string | null;
   reviewer_decision_note?: string | null;
@@ -343,7 +344,7 @@ function ProofStatusMessage({ proof }: { proof: PaymentProofTableItem }) {
     return (
       <div className="mt-1 text-xs text-slate-500">
         <span className="font-semibold text-slate-700">Payment voided</span>
-        {proof.void_reason ? <span className="italic">: {proof.void_reason}</span> : null}
+        {proof.void_reason ? <span className="break-words italic">: {proof.void_reason}</span> : null}
       </div>
     );
   }
@@ -456,9 +457,9 @@ function ProofActions({ proof }: { proof: PaymentProofTableItem }) {
                 </a>
               </DropdownMenuItem>
             ) : null}
-            {proof.receipt_token && (
+            {proof.receipt_url && (
               <DropdownMenuItem asChild>
-                <Link href={`/receipt/${proof.receipt_token}`} target="_blank">
+                <Link href={proof.receipt_url} target="_blank">
                   Open receipt
                 </Link>
               </DropdownMenuItem>
@@ -498,8 +499,6 @@ function ProofMobileCard({
   canManageAssignments: boolean;
 }) {
   const invoiceHref = proof.invoices?.id ? `/invoices/${proof.invoices.id}` : "#";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-
   return (
     <article className={cn("q-mobile-card", selected && "border-cedar/40 bg-cedar/5", active && "outline outline-2 outline-cedar/25")}>
       <div className="flex items-start gap-3">
@@ -511,10 +510,10 @@ function ProofMobileCard({
         <ProofPreview proof={proof} />
         <div className="min-w-0 flex-1">
           <Link className="block font-semibold text-ink" href={invoiceHref}>
-            <span className="block truncate">{proof.invoices?.invoice_number || "Invoice"}</span>
-            <span className="block truncate text-xs font-normal text-slate-500">{proof.invoices?.title || "Untitled invoice"}</span>
+            <span className="block break-words" title={proof.invoices?.invoice_number || "Invoice"}>{proof.invoices?.invoice_number || "Invoice"}</span>
+            <span className="block break-words text-xs font-normal text-slate-500" title={proof.invoices?.title || "Untitled invoice"}>{proof.invoices?.title || "Untitled invoice"}</span>
           </Link>
-          <p className="mt-1 truncate text-xs text-slate-500">{proof.invoices?.clients?.name || "No client"}</p>
+          <p className="mt-1 break-words text-xs text-slate-500" title={proof.invoices?.clients?.name || "No client"}>{proof.invoices?.clients?.name || "No client"}</p>
           <ProofAssignmentBadges assignments={proof.assignments} />
         </div>
         <ProofActions proof={proof} />
@@ -557,13 +556,13 @@ function ProofMobileCard({
         </div>
       </div>
 
-      {proof.receipt_token ? (
+      {proof.receipt_url ? (
         <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row">
-          <Link className="btn btn-secondary text-xs" href={`/receipt/${proof.receipt_token}`} target="_blank">
+          <Link className="btn btn-secondary text-xs" href={proof.receipt_url} target="_blank">
             Open receipt
           </Link>
           <CopyLinkButton
-            value={`${appUrl}/receipt/${proof.receipt_token}`}
+            value={proof.receipt_url}
             label="Copy receipt link"
             className="btn btn-secondary text-xs"
           />
@@ -867,7 +866,7 @@ export function PaymentProofsTable({
             </div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-ink">Proof queue shortcuts</p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">
+              <p className="mt-0.5 break-words text-xs text-slate-500">
                 Active {safeActiveIndex + 1} of {filteredProofs.length}: {activeProof?.invoices?.invoice_number || activeProof?.invoices?.title || "Proof"}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
@@ -1038,18 +1037,18 @@ export function PaymentProofsTable({
                       </TableCell>
                       <TableCell className="max-w-0">
                         <Link className="block min-w-0 font-semibold text-ink transition hover:text-cedar" href={invoiceHref}>
-                          <span className="block truncate">{proof.invoices?.invoice_number || "Invoice"}</span>
-                          <span className="block truncate text-xs font-normal text-slate-500">{proof.invoices?.title || "Untitled invoice"}</span>
+                          <span className="block break-words" title={proof.invoices?.invoice_number || "Invoice"}>{proof.invoices?.invoice_number || "Invoice"}</span>
+                          <span className="block break-words text-xs font-normal text-slate-500" title={proof.invoices?.title || "Untitled invoice"}>{proof.invoices?.title || "Untitled invoice"}</span>
                         </Link>
                         <ProofAssignmentBadges assignments={proof.assignments} />
                       </TableCell>
                       <TableCell className="max-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-700">
+                        <span className="block break-words text-sm font-medium text-slate-700">
                           {proof.invoices?.clients?.name || "No client"}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="block truncate text-sm font-semibold text-ink">{proofAmount(proof)}</span>
+                        <span className="block break-words text-sm font-semibold text-ink">{proofAmount(proof)}</span>
                         {proof.payment_date ? (
                           <span className="block truncate text-xs text-slate-500">Paid {shortDate(proof.payment_date)}</span>
                         ) : null}

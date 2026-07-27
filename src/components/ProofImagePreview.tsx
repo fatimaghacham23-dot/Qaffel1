@@ -69,8 +69,8 @@ export function ProofImagePreview({ imageUrl, alt = "Payment proof", thumbClassN
           aria-label="Proof image preview"
           onClick={close}
         >
-          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between gap-2 text-white">
+          <div className="mx-auto flex min-w-0 w-full max-w-4xl flex-1 flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col gap-2 text-white sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs font-semibold sm:text-sm">Pinch or scroll to inspect · tap outside to close</p>
               <div className="flex flex-wrap items-center gap-2">
                 <button

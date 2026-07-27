@@ -9,6 +9,12 @@ import {
 } from "@/lib/operations";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
 import type { InvoiceStatus } from "@/lib/types";
+import {
+  deriveOperationsCenterCurrencySummary,
+  type OperationsCenterClientOpenBalanceFact,
+  type OperationsCenterCurrencyFact,
+  type OperationsCenterCurrencySummaryResult
+} from "@/lib/operations-center-currency-summary";
 
 export type AlertPriority = "critical" | "high" | "medium" | "low";
 export type AlertBucket = "payments" | "clients" | "invoices" | "proofs";
@@ -44,14 +50,6 @@ export type ClientRiskRow = {
   href: string;
 };
 
-export type CashFlowSnapshot = {
-  expectedIncomingWeekUsd: number;
-  overdueRecoverableUsd: number;
-  unpaidDepositsUsd: number;
-  velocityLabel: string;
-  velocityDetail: string | null;
-};
-
 export type PaymentMethodInsight = {
   preferredByCount: { method: string; count: number; share: number } | null;
   fastestSettling: { method: string; medianHours: number } | null;
@@ -80,6 +78,7 @@ export type OCInvoiceProof = {
 };
 
 export type OCInvoiceRow = {
+  workspace_id?: string | null;
   id: string;
   title: string;
   invoice_number?: string | null;
@@ -121,7 +120,7 @@ export type OperationsCenterModel = {
   timeline: OpsTimelineItem[];
   clientRisks: ClientRiskRow[];
   insights: BusinessInsight[];
-  cashFlow: CashFlowSnapshot;
+  currencySummary: OperationsCenterCurrencySummaryResult;
   paymentMethods: PaymentMethodInsight;
   health: WorkspaceHealth;
 };
@@ -235,6 +234,7 @@ export function buildTimelineItems(
 }
 
 export function buildOperationsCenterModel(input: {
+  workspaceId: string;
   invoices: OCInvoiceRow[];
   /** Pending proofs with invoice join (flat list) */
   pendingProofQueue: Array<{
@@ -248,18 +248,22 @@ export function buildOperationsCenterModel(input: {
   profile: { business_name?: string | null; phone?: string | null; business_address?: string | null } | null;
   userEmail: string | null | undefined;
 }): OperationsCenterModel {
-  const { invoices, pendingProofQueue, events, paymentMethods, profile, userEmail } = input;
-  const billable = invoices.filter((i) => !isQuoteDocument(i));
-  const quotes = invoices.filter((i) => isQuoteDocument(i));
+  const { workspaceId, invoices, pendingProofQueue, events, paymentMethods, profile, userEmail } = input;
+  const workspaceInvoices = invoices.filter((invoice) => invoice.workspace_id === workspaceId);
+  const billable = workspaceInvoices.filter((invoice) => !isQuoteDocument(invoice));
+  const quotes = workspaceInvoices.filter((invoice) => isQuoteDocument(invoice));
 
   const invoiceTitleById = new Map<string, string>();
-  for (const inv of invoices) {
+  for (const inv of workspaceInvoices) {
     const label = inv.invoice_number ? `${inv.invoice_number} · ${inv.title}` : inv.title;
     invoiceTitleById.set(inv.id, label);
   }
 
+  const workspaceEvents = events.filter((event) => invoiceTitleById.has(event.invoice_id));
+  const workspacePendingProofQueue = pendingProofQueue.filter((proof) => invoiceTitleById.has(proof.invoice_id));
+
   const reminderLastByInvoice = new Map<string, string>();
-  for (const e of events) {
+  for (const e of workspaceEvents) {
     if (e.event_type !== "reminder_copied") continue;
     const prev = reminderLastByInvoice.get(e.invoice_id);
     if (!prev || e.created_at > prev) reminderLastByInvoice.set(e.invoice_id, e.created_at);
@@ -407,7 +411,7 @@ export function buildOperationsCenterModel(input: {
     }
   }
 
-  for (const p of pendingProofQueue) {
+  for (const p of workspacePendingProofQueue) {
     const tier = getPendingProofUrgency(p.uploaded_at);
     if (tier === "fresh") continue;
     const inv = p.invoices;
@@ -453,7 +457,7 @@ export function buildOperationsCenterModel(input: {
 
   const voidedRecently = (() => {
     let n = 0;
-    for (const inv of invoices) {
+    for (const inv of workspaceInvoices) {
       for (const pr of inv.payment_proofs || []) {
         if ((pr.status || "").toLowerCase() !== "voided" || !pr.voided_at) continue;
         const t = new Date(pr.voided_at).getTime();
@@ -480,7 +484,6 @@ export function buildOperationsCenterModel(input: {
       name: string;
       phone: string | null;
       overdueCount: number;
-      openUsd: number;
       rejectedProofs: number;
       latePaidCount: number;
       paidCount: number;
@@ -501,7 +504,6 @@ export function buildOperationsCenterModel(input: {
         name,
         phone,
         overdueCount: 0,
-        openUsd: 0,
         rejectedProofs: 0,
         latePaidCount: 0,
         paidCount: 0,
@@ -510,9 +512,6 @@ export function buildOperationsCenterModel(input: {
     }
     const row = clientAgg.get(cid)!;
     if (ds === "overdue") row.overdueCount += 1;
-    if (["sent", "unpaid", "partial", "overdue"].includes(ds)) {
-      row.openUsd += Number(inv.amount_usd || 0);
-    }
     for (const pr of inv.payment_proofs || []) {
       if ((pr.status || "").toLowerCase() === "rejected") row.rejectedProofs += 1;
       if ((pr.status || "").toLowerCase() === "accepted" && inv.due_date && pr.payment_date) {
@@ -552,14 +551,13 @@ export function buildOperationsCenterModel(input: {
   };
   for (const a of alerts) alertsByBucket[a.bucket].push(a);
 
-  const timeline = buildTimelineItems(events, invoiceTitleById).slice(0, 60);
+  const timeline = buildTimelineItems(workspaceEvents, invoiceTitleById).slice(0, 60);
 
   const clientRisks: ClientRiskRow[] = [];
   for (const [cid, row] of clientAgg) {
     const tags: string[] = [];
     if (row.overdueCount >= 2) tags.push("Many overdue");
     if (row.latePaidCount >= 2) tags.push("Often pays late");
-    if (row.openUsd >= 5000) tags.push("High open balance (USD)");
     if (row.rejectedProofs >= 2) tags.push("Rejected proofs");
     if (row.paidCount >= 3 && row.latePaidCount === 0 && row.fastPayerSamples >= 2) tags.push("Fast payer");
     if (row.paidCount >= 5 && row.rejectedProofs === 0 && row.latePaidCount <= 1) tags.push("Reliable");
@@ -583,7 +581,7 @@ export function buildOperationsCenterModel(input: {
 
   const insights: BusinessInsight[] = [];
   const acceptedProofs: OCInvoiceProof[] = [];
-  for (const inv of invoices) {
+  for (const inv of workspaceInvoices) {
     for (const pr of inv.payment_proofs || []) {
       if ((pr.status || "").toLowerCase() === "accepted") acceptedProofs.push(pr);
     }
@@ -666,24 +664,39 @@ export function buildOperationsCenterModel(input: {
     });
   }
 
-  let expectedIncomingWeekUsd = 0;
-  let overdueRecoverableUsd = 0;
-  let unpaidDepositsUsd = 0;
   const weekEnd = new Date(now + 7 * MS_DAY).toISOString().slice(0, 10);
-
+  const operationsCurrencyFacts: OperationsCenterCurrencyFact[] = [];
+  const clientOpenBalanceFacts: OperationsCenterClientOpenBalanceFact[] = [];
   for (const inv of billable) {
     const proofs = rowProofs(inv);
     const rec = reconciled(inv);
-    const ds = getDisplayInvoiceStatus({ ...inv, status: rec });
-    const bal = getRemainingBalance(inv as any, proofs);
-    if (ds === "overdue") overdueRecoverableUsd += bal.usd;
-    if (inv.due_date && inv.due_date <= weekEnd && inv.due_date >= today && ds !== "paid") {
-      expectedIncomingWeekUsd += bal.usd;
-    }
-    const dep = getDepositStatus({ ...inv, status: rec }, proofs);
-    if (dep?.label === "Not paid" && ds !== "paid") {
-      const rate = Math.max(1, Number(inv.exchange_rate_lbp_per_usd) || 89000);
-      unpaidDepositsUsd += dep.request.currency === "USD" ? dep.remainingDeposit : dep.remainingDeposit / rate;
+    const status = getDisplayInvoiceStatus({ ...inv, status: rec });
+    const balance = getRemainingBalance(inv as any, proofs);
+    const currency = balance.primaryCurrency;
+    const billed = currency === "USD" ? Number(inv.amount_usd || 0) : Number(inv.amount_lbp || 0);
+    const isOpen = ["sent", "unpaid", "partial", "overdue"].includes(status);
+    const deposit = getDepositStatus({ ...inv, status: rec }, proofs);
+    operationsCurrencyFacts.push({
+      currency,
+      billed,
+      openBalance: isOpen ? balance.primaryBalance : 0,
+      expectedIncomingWeek: inv.due_date && inv.due_date <= weekEnd && inv.due_date >= today && status !== "paid" ? balance.primaryBalance : 0,
+      overdueRecoverable: status === "overdue" ? balance.primaryBalance : 0,
+      unpaidDeposits: deposit?.label === "Not paid" && status !== "paid" ? deposit.remainingDeposit : 0,
+      workspaceMatched: inv.workspace_id === workspaceId,
+      eligibleForBalanceHealth: true,
+      eligibleForExpectedIncoming: true,
+      eligibleForOverdueRecoverable: true,
+      eligibleForUnpaidDeposits: true
+    });
+    if (inv.client_id && isOpen) {
+      clientOpenBalanceFacts.push({
+        clientId: inv.client_id,
+        currency,
+        openAmount: balance.primaryBalance,
+        workspaceMatched: inv.workspace_id === workspaceId,
+        eligibleForClientRisk: true
+      });
     }
   }
 
@@ -695,28 +708,34 @@ export function buildOperationsCenterModel(input: {
     const t = new Date(p.confirmed_at || p.uploaded_at).getTime();
     return Number.isFinite(t) && now - t >= 7 * MS_DAY && now - t < 14 * MS_DAY;
   }).length;
-  let velocityLabel = "Payment velocity";
-  let velocityDetail: string | null = null;
-  if (acceptedLast7 + acceptedPrev7 >= 3) {
-    if (acceptedLast7 > acceptedPrev7) {
-      velocityLabel = "Accelerating confirmations";
-      velocityDetail = `${acceptedLast7} accepted in the last 7 days vs ${acceptedPrev7} in the prior 7 days.`;
-    } else if (acceptedLast7 < acceptedPrev7) {
-      velocityLabel = "Slower confirmations";
-      velocityDetail = `${acceptedLast7} accepted in the last 7 days vs ${acceptedPrev7} in the prior 7 days.`;
-    } else {
-      velocityLabel = "Steady confirmation pace";
-      velocityDetail = `${acceptedLast7} accepted payments in each of the last two 7-day windows.`;
+  const currencySummary = deriveOperationsCenterCurrencySummary({
+    currencyFacts: operationsCurrencyFacts,
+    clientOpenBalanceFacts,
+    shared: { acceptedLast7, acceptedPrevious7: acceptedPrev7 }
+  });
+
+  for (const clientCurrency of currencySummary.clientCurrencySummaries) {
+    if (clientCurrency.highOpenBalance === false) continue;
+    const row = clientAgg.get(clientCurrency.clientId);
+    if (!row) continue;
+    let clientRisk = clientRisks.find((risk) => risk.clientId === clientCurrency.clientId);
+    if (!clientRisk) {
+      clientRisk = {
+        clientId: clientCurrency.clientId,
+        name: row.name,
+        tags: [],
+        summary: "Review payment behaviour on open invoices.",
+        href: `/clients/${clientCurrency.clientId}`
+      };
+      clientRisks.push(clientRisk);
+    }
+    if (clientCurrency.highOpenBalance) {
+      clientRisk.tags.push("High open balance (USD)");
+    } else if (clientCurrency.openAmount > 0) {
+      clientRisk.tags.push(`Threshold not configured for ${clientCurrency.currency}`);
     }
   }
-
-  const cashFlow: CashFlowSnapshot = {
-    expectedIncomingWeekUsd,
-    overdueRecoverableUsd,
-    unpaidDepositsUsd,
-    velocityLabel,
-    velocityDetail
-  };
+  clientRisks.sort((a, b) => b.tags.length - a.tags.length || a.name.localeCompare(b.name));
 
   const settleHours: Map<string, number[]> = new Map();
   for (const p of acceptedProofs) {
@@ -797,24 +816,13 @@ export function buildOperationsCenterModel(input: {
   const overdueRatio = openCount ? overdueOnly / openCount : 0;
   const overduePoints = Math.round(25 * (1 - Math.min(1, overdueRatio * 2)));
 
-  const pendingHours = pendingProofQueue.map((p) => (now - new Date(p.uploaded_at).getTime()) / MS_HOUR);
+  const pendingHours = workspacePendingProofQueue.map((p) => (now - new Date(p.uploaded_at).getTime()) / MS_HOUR);
   const avgPending = pendingHours.length ? pendingHours.reduce((a, b) => a + b, 0) / pendingHours.length : 0;
   const proofPoints =
-    pendingProofQueue.length === 0 ? 25 : avgPending < 12 ? 22 : avgPending < 36 ? 15 : avgPending < 72 ? 8 : 3;
+    workspacePendingProofQueue.length === 0 ? 25 : avgPending < 12 ? 22 : avgPending < 36 ? 15 : avgPending < 72 ? 8 : 3;
 
-  const totalBilledUsd = billable.reduce((s, i) => s + Number(i.amount_usd || 0), 0);
-  const totalOpenUsd = billable.reduce((s, i) => {
-    const ds = displayStatus(i);
-    if (!["sent", "unpaid", "partial", "overdue"].includes(ds)) return s;
-    const proofs = rowProofs(i);
-    const rec = reconciled(i);
-    const bal = getRemainingBalance(i as any, proofs);
-    return s + bal.usd;
-  }, 0);
-  const balanceRatio = totalBilledUsd > 0 ? totalOpenUsd / totalBilledUsd : 0;
-  const balancePoints = Math.round(20 * (1 - Math.min(1, balanceRatio)));
+  const rawScore = profileScore + readinessScore + overduePoints + proofPoints;
 
-  const rawScore = profileScore + readinessScore + overduePoints + proofPoints + balancePoints;
   const score = Math.max(0, Math.min(100, Math.round(rawScore)));
   const label =
     score >= 85 ? "Strong operations" : score >= 70 ? "Healthy" : score >= 50 ? "Needs attention" : "At risk";
@@ -827,7 +835,6 @@ export function buildOperationsCenterModel(input: {
       { key: "readiness", label: "Payment readiness", points: readinessScore, max: 30, note: "Active methods and complete instructions." },
       { key: "overdue", label: "Overdue pressure", points: overduePoints, max: 25, note: "Lower when fewer open invoices are overdue." },
       { key: "proofs", label: "Proof response", points: proofPoints, max: 25, note: "Higher when the pending queue is fresh." },
-      { key: "balance", label: "Open balance load", points: balancePoints, max: 20, note: "Lower unpaid share of billed USD." }
     ]
   };
 
@@ -837,7 +844,7 @@ export function buildOperationsCenterModel(input: {
     timeline,
     clientRisks,
     insights,
-    cashFlow,
+    currencySummary,
     paymentMethods: paymentMethodsInsight,
     health
   };

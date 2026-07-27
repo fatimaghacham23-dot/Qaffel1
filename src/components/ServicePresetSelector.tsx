@@ -29,11 +29,17 @@ export function ServicePresetSelector({ presets }: ServicePresetSelectorProps) {
 
     // Prefill title
     const titleInput = document.getElementById("title") as HTMLInputElement;
-    if (titleInput) titleInput.value = preset.name;
+    if (titleInput) {
+      titleInput.value = preset.name;
+      dispatchFieldUpdate(titleInput);
+    }
 
     // Prefill description
     const descInput = document.getElementById("description") as HTMLTextAreaElement;
-    if (descInput) descInput.value = preset.description || "";
+    if (descInput) {
+      descInput.value = preset.description || "";
+      dispatchFieldUpdate(descInput);
+    }
 
     // Prefill amounts
     const usdInput = document.getElementById("amount_usd") as HTMLInputElement;

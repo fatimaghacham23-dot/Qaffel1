@@ -6,7 +6,19 @@
 import { documentStatus, isQuoteDocument } from "@/lib/documents";
 import { formatPaymentMethod, money, todayIso } from "@/lib/format";
 import { getDisplayInvoiceStatus, getRemainingBalance, reconcileInvoiceStatus, type MinimalProof } from "@/lib/status";
+import { getOutstandingBalance, isAcceptedNonVoidedPayment, isActiveInvoice, isOverdueInvoice, isOutstandingInvoice, type CollectionInvoice } from "@/lib/collection";
 import { csvEscapeCell, csvNumber, monthKeySafe } from "@/lib/safe-metrics";
+import { derivePaymentMethodCurrencyCharts, type MonthlyPaymentMethodCurrencyTotal, type PaymentMethodCurrencyChart } from "@/lib/payment-method-currency-charts";
+import { deriveRevenueCurrencyCharts, type MonthlyRevenueCurrencyFact, type RevenueCurrencyChart } from "@/lib/revenue-currency-charts";
+import { deriveMomentumCurrencyIndicators, type MomentumCollectionCurrencyFact, type MomentumCurrencyIndicatorInput, type MomentumCurrencyIndicatorResult, type MomentumOutstandingCurrencyFact } from "@/lib/momentum-currency-indicators";
+import { deriveRevenueCurrencyKpis, type CollectedBilledCurrencyFact, type InvoiceCurrencyFact, type MonthlyRevenueCurrencyValue, type RevenueCurrencyKpiInput, type RevenueCurrencyKpiSummary } from "@/lib/revenue-currency-kpis";
+import {
+  deriveMonthlyIntelligenceCurrencySummaries,
+  type MonthlyIntelligenceCurrencyFact,
+  type MonthlyIntelligenceCurrencySummaryResult,
+  type MonthlyIntelligencePaymentMethodFact,
+  type MonthlySharedIntelligenceFact
+} from "@/lib/monthly-intelligence-currency-summaries";
 import type { InvoiceStatus } from "@/lib/types";
 import type { OCEventRow, OCInvoiceProof, OCInvoiceRow } from "@/lib/operations-center";
 
@@ -30,25 +42,9 @@ function median(nums: number[]): number | null {
   return medianSorted([...nums].sort((a, b) => a - b));
 }
 
-function invPrimaryCur(inv: OCInvoiceRow): "USD" | "LBP" {
-  return (inv.currency || "USD").toUpperCase() === "LBP" ? "LBP" : "USD";
-}
-
-function proofPrimaryAmount(p: OCInvoiceProof, inv: OCInvoiceRow): number {
-  return invPrimaryCur(inv) === "USD" ? num(p.amount_usd) : num(p.amount_lbp);
-}
-
-function invoiceBilledPrimary(inv: OCInvoiceRow): number {
-  return invPrimaryCur(inv) === "USD" ? num(inv.amount_usd) : num(inv.amount_lbp);
-}
-
-/** Chart / risk totals: LBP → USD via invoice rate; invalid rate → 0 */
-function toApproxUsd(inv: OCInvoiceRow, primaryAmt: number): number {
-  const a = Number.isFinite(primaryAmt) ? primaryAmt : 0;
-  if (invPrimaryCur(inv) === "USD") return a;
-  const r = num(inv.exchange_rate_lbp_per_usd);
-  if (r <= 0) return 0;
-  return a / r;
+function invoiceCurrency(inv: OCInvoiceRow): "USD" | "LBP" | null {
+  const currency = String(inv.currency || "").trim().toUpperCase();
+  return currency === "USD" || currency === "LBP" ? currency : null;
 }
 
 function rowProofs(inv: OCInvoiceRow): MinimalProof[] {
@@ -59,6 +55,17 @@ function rowProofs(inv: OCInvoiceRow): MinimalProof[] {
   }));
 }
 
+function remainingBalance(inv: OCInvoiceRow) {
+  return getRemainingBalance(
+    {
+      amount_usd: inv.amount_usd === null || inv.amount_usd === undefined ? null : num(inv.amount_usd),
+      amount_lbp: inv.amount_lbp === null || inv.amount_lbp === undefined ? null : num(inv.amount_lbp),
+      status: inv.status,
+      currency: inv.currency
+    },
+    rowProofs(inv)
+  );
+}
 function reconciled(inv: OCInvoiceRow): InvoiceStatus {
   return reconcileInvoiceStatus(inv as any, rowProofs(inv));
 }
@@ -76,17 +83,10 @@ function methodKey(m: string | null | undefined): string {
 }
 
 export type RevenueIntelligence = {
-  bestEarningMonthLabel: string | null;
-  bestEarningMonthUsd: number;
-  averageInvoiceUsd: number | null;
+  revenueCurrencyKpis: RevenueCurrencyKpiSummary[];
   averagePaymentDelayDays: number | null;
-  revenueTrend: "up" | "down" | "flat" | "insufficient_data";
-  collectedVsBilledRatio: number | null;
   depositConversionRate: number | null;
-  /** USD-equivalent for charting: USD invoices + LBP converted at invoice rate */
-  collectedByMonth: { key: string; label: string; usd: number }[];
-  billedByMonth: { key: string; label: string; usd: number }[];
-  overdueByMonth: { key: string; label: string; usd: number }[];
+  currencyCharts: RevenueCurrencyChart[];
 };
 
 export type MethodBehaviorRow = {
@@ -117,31 +117,12 @@ export type ReminderEffectiveness = {
   whatsappThenPaidWithin14d: number;
 };
 
-export type MomentumIndicators = {
-  paymentVelocityLabel: string;
-  paymentVelocityDetail: string | null;
-  collectionVelocityUsdLast30: number;
-  collectionVelocityUsdPrior30: number;
-  outstandingGrowthUsd: number;
-  overdueCountNow: number;
-  overdueCountPriorMonth: number;
-  repeatClientRate: number | null;
-};
+export type MomentumIndicators = MomentumCurrencyIndicatorResult;
+
 
 export type SmartRecommendation = { text: string; basis: string };
 
-export type MonthlyReportRow = {
-  monthKey: string;
-  monthLabel: string;
-  invoicesCreated: number;
-  /** Accepted proofs in month, approx. USD (LBP at invoice rate). */
-  paidTotalUsd: number;
-  /** Overdue remaining balances in month bucket, approx. USD. */
-  overdueTotalUsd: number;
-  newClients: number;
-  topMethod: string | null;
-  operationalIssues: number;
-};
+
 
 export type OperationalListItem = {
   id: string;
@@ -169,13 +150,6 @@ export type ClientSegmentationRow = {
   href: string;
 };
 
-export type StackedMethodMonth = {
-  label: string;
-  key: string;
-  /** method → approx. USD equivalent */
-  stacks: Record<string, number>;
-};
-
 export type IntelligenceBundle = {
   revenue: RevenueIntelligence;
   paymentMethods: MethodBehaviorRow[];
@@ -183,10 +157,10 @@ export type IntelligenceBundle = {
   reminders: ReminderEffectiveness;
   momentum: MomentumIndicators;
   recommendations: SmartRecommendation[];
-  monthlyReports: MonthlyReportRow[];
+  monthlyReports: MonthlyIntelligenceCurrencySummaryResult;
   operational: OperationalFilters;
   clientSegmentation: ClientSegmentationRow[];
-  stackedMethods: StackedMethodMonth[];
+  paymentMethodCurrencyCharts: PaymentMethodCurrencyChart[];
 };
 
 export type ClientIntelligence = {
@@ -207,74 +181,341 @@ function invoiceTitle(inv: OCInvoiceRow) {
   return inv.invoice_number ? `${inv.invoice_number} · ${inv.title}` : inv.title;
 }
 
+function collectionInvoiceForRevenue(invoice: OCInvoiceRow): CollectionInvoice {
+  return {
+    id: invoice.id,
+    status: invoice.status,
+    document_type: invoice.document_type,
+    currency: invoice.currency,
+    amount_usd: num(invoice.amount_usd),
+    amount_lbp: num(invoice.amount_lbp),
+    due_date: invoice.due_date,
+    created_at: invoice.created_at,
+    payment_proofs: (invoice.payment_proofs || []).map((proof) => ({
+      status: proof.status || "",
+      amount_usd: proof.amount_usd === null || proof.amount_usd === undefined ? null : Number(proof.amount_usd),
+      amount_lbp: proof.amount_lbp === null || proof.amount_lbp === undefined ? null : Number(proof.amount_lbp),
+      voided_at: proof.voided_at || null
+    }))
+  };
+}
+
+function revenueCurrency(invoice: OCInvoiceRow): "USD" | "LBP" | null {
+  const currency = String(invoice.currency || "").trim().toUpperCase();
+  return currency === "USD" || currency === "LBP" ? currency : null;
+}
+
+function revenueAmount(invoice: OCInvoiceRow, proof: OCInvoiceProof | null, currency: "USD" | "LBP") {
+  if (proof) return currency === "USD" ? num(proof.amount_usd) : num(proof.amount_lbp);
+  return currency === "USD" ? num(invoice.amount_usd) : num(invoice.amount_lbp);
+}
+
+/**
+ * Produces only factual revenue facts for the supplied, already-authorized
+ * workspace invoices. The pure chart adapter owns aggregation and zero filling.
+ */
+export function deriveRevenueCurrencyFacts(input: {
+  invoices: readonly OCInvoiceRow[];
+  reportingMonths: readonly string[];
+}): MonthlyRevenueCurrencyFact[] {
+  const reportingMonthSet = new Set(input.reportingMonths);
+  const facts: MonthlyRevenueCurrencyFact[] = [];
+  const today = todayIso();
+
+  for (const invoice of input.invoices) {
+    const currency = revenueCurrency(invoice);
+    const collectionInvoice = collectionInvoiceForRevenue(invoice);
+    if (!currency || !isActiveInvoice(collectionInvoice)) continue;
+
+    const createdMonth = monthKeySafe(invoice.created_at);
+    if (createdMonth && reportingMonthSet.has(createdMonth)) {
+      facts.push({ month: createdMonth, currency, metric: "billed", amount: revenueAmount(invoice, null, currency) });
+    }
+
+    if (isOutstandingInvoice(collectionInvoice) && invoice.due_date && invoice.due_date < today) {
+      const dueMonth = monthKeySafe(invoice.due_date) ?? monthKeySafe(`${invoice.due_date}T12:00:00`);
+      if (dueMonth && reportingMonthSet.has(dueMonth)) {
+        facts.push({
+          month: dueMonth,
+          currency,
+          metric: "overdue",
+          amount: getOutstandingBalance(collectionInvoice).primaryBalance
+        });
+      }
+    }
+
+    for (const proof of invoice.payment_proofs || []) {
+      if (!isAcceptedNonVoidedPayment(proof)) continue;
+      const confirmedMonth = monthKeySafe(proof.confirmed_at || proof.uploaded_at);
+      if (!confirmedMonth || !reportingMonthSet.has(confirmedMonth)) continue;
+      facts.push({
+        month: confirmedMonth,
+        currency,
+        metric: "collected",
+        amount: revenueAmount(invoice, proof, currency)
+      });
+    }
+  }
+
+  return facts;
+}
+
+/**
+ * Produces factual inputs for the active revenue KPI cards. The caller has
+ * already applied workspace scope and non-quote eligibility. This intentionally
+ * mirrors the legacy KPI source rules without conversion or aggregation.
+ */
+export function deriveRevenueCurrencyKpiFacts(input: {
+  invoices: readonly OCInvoiceRow[];
+  reportingMonths: readonly string[];
+}): RevenueCurrencyKpiInput {
+  const reportingMonthSet = new Set(input.reportingMonths);
+  const monthlyValues: MonthlyRevenueCurrencyValue[] = [];
+  const invoiceFacts: InvoiceCurrencyFact[] = [];
+  const collectedBilledFacts: CollectedBilledCurrencyFact[] = [];
+
+  for (const invoice of input.invoices) {
+    const currency = revenueCurrency(invoice);
+    if (!currency) continue;
+    const billedAmount = revenueAmount(invoice, null, currency);
+    invoiceFacts.push({ currency, amount: billedAmount, eligibleForAverage: true });
+    collectedBilledFacts.push({ currency, billed: billedAmount, collected: 0 });
+
+    // The old best-month and trend loop skipped records without a created date.
+    const canContributeToMonthlyKpis = Boolean(invoice.created_at);
+    for (const proof of invoice.payment_proofs || []) {
+      // Intentionally matches the legacy KPI status test; void semantics remain unchanged here.
+      if ((proof.status || "").toLowerCase() !== "accepted") continue;
+      const amount = revenueAmount(invoice, proof, currency);
+      collectedBilledFacts.push({ currency, billed: 0, collected: amount });
+      if (!canContributeToMonthlyKpis) continue;
+      const month = monthKeySafe(proof.confirmed_at || proof.uploaded_at);
+      if (!month || !reportingMonthSet.has(month)) continue;
+      monthlyValues.push({ month, currency, collected: amount, billed: 0 });
+    }
+  }
+
+  return { reportingMonths: input.reportingMonths, monthlyValues, invoiceFacts, collectedBilledFacts };
+}
+
+/**
+ * Produces factual inputs for active momentum. The caller supplies already-scoped,
+ * non-quote workspace invoices; canonical collection predicates determine
+ * outstanding eligibility before the pure adapter aggregates by currency.
+ */
+export function deriveMomentumCurrencyFacts(input: {
+  invoices: readonly OCInvoiceRow[];
+  now: number;
+  today: string;
+}): MomentumCurrencyIndicatorInput {
+  const collectionFacts: MomentumCollectionCurrencyFact[] = [];
+  const outstandingFacts: MomentumOutstandingCurrencyFact[] = [];
+  const oneMonthAgo = new Date(input.now - 30 * MS_DAY).toISOString();
+  const recentDueStart = oneMonthAgo.slice(0, 10);
+  let overdueCountNow = 0;
+  let overdueCountPriorMonth = 0;
+
+  for (const invoice of input.invoices) {
+    const collectionInvoice = collectionInvoiceForRevenue(invoice);
+    if (isOverdueInvoice(collectionInvoice, input.today)) {
+      overdueCountNow += 1;
+      if (invoice.due_date && invoice.due_date >= recentDueStart) overdueCountPriorMonth += 1;
+    }
+
+    const currency = revenueCurrency(invoice);
+    if (!currency) continue;
+    const eligibleForOutstanding = isOutstandingInvoice(collectionInvoice);
+    const remaining = getOutstandingBalance(collectionInvoice).primaryBalance;
+    outstandingFacts.push({
+      currency,
+      currentAmount: remaining,
+      olderAmount: invoice.created_at && invoice.created_at < oneMonthAgo ? remaining : 0,
+      eligibleForOutstanding
+    });
+
+    for (const proof of invoice.payment_proofs || []) {
+      // Matches the active momentum acceptance source rule; proof void semantics are unchanged here.
+      if ((proof.status || "").toLowerCase() !== "accepted") continue;
+      const timestamp = new Date(proof.confirmed_at || proof.uploaded_at).getTime();
+      if (!Number.isFinite(timestamp)) continue;
+      const age = input.now - timestamp;
+      const period = age < 30 * MS_DAY ? "current_30d" : age >= 30 * MS_DAY && age < 60 * MS_DAY ? "previous_30d" : null;
+      if (!period) continue;
+      collectionFacts.push({ currency, period, amount: revenueAmount(invoice, proof, currency) });
+    }
+  }
+
+  const clientInvoiceCounts = input.invoices.reduce((counts, invoice) => {
+    if (!invoice.client_id) return counts;
+    counts.set(invoice.client_id, (counts.get(invoice.client_id) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const repeatClients = [...clientInvoiceCounts.values()].filter((count) => count >= 2).length;
+
+  return {
+    collectionFacts,
+    outstandingFacts,
+    shared: {
+      overdueCountNow,
+      overdueCountPriorMonth,
+      repeatClientRate: clientInvoiceCounts.size > 0 ? repeatClients / clientInvoiceCounts.size : null
+    }
+  };
+}
+export type MonthlyIntelligenceInvoice = {
+  workspace_id?: string | null;
+  id: string;
+  status: InvoiceStatus;
+  document_type?: string | null;
+  currency?: string | null;
+  amount_usd?: number | string | null;
+  amount_lbp?: number | string | null;
+  due_date?: string | null;
+  created_at?: string | null;
+  payment_proofs?: Array<{
+    status?: string | null;
+    amount_usd?: number | string | null;
+    amount_lbp?: number | string | null;
+    uploaded_at?: string | null;
+    confirmed_at?: string | null;
+    method?: string | null;
+    voided_at?: string | null;
+  }> | null;
+};
+
+export type MonthlyIntelligenceClient = {
+  workspace_id?: string | null;
+  created_at?: string | null;
+};
+
+function monthlyCollectionInvoice(invoice: MonthlyIntelligenceInvoice): CollectionInvoice {
+  return {
+    id: invoice.id,
+    status: invoice.status,
+    document_type: invoice.document_type,
+    currency: invoice.currency,
+    amount_usd: invoice.amount_usd === null || invoice.amount_usd === undefined ? null : num(invoice.amount_usd),
+    amount_lbp: invoice.amount_lbp === null || invoice.amount_lbp === undefined ? null : num(invoice.amount_lbp),
+    due_date: invoice.due_date,
+    created_at: invoice.created_at,
+    payment_proofs: (invoice.payment_proofs || []).map((proof) => ({
+      status: proof.status || "",
+      amount_usd: proof.amount_usd === null || proof.amount_usd === undefined ? null : num(proof.amount_usd),
+      amount_lbp: proof.amount_lbp === null || proof.amount_lbp === undefined ? null : num(proof.amount_lbp),
+      voided_at: proof.voided_at
+    }))
+  };
+}
+
+function monthlyCurrency(invoice: MonthlyIntelligenceInvoice): "USD" | "LBP" {
+  return (invoice.currency || "USD").trim().toUpperCase() === "LBP" ? "LBP" : "USD";
+}
+
+function monthlyProofAmount(
+  proof: NonNullable<MonthlyIntelligenceInvoice["payment_proofs"]>[number],
+  currency: "USD" | "LBP"
+): number {
+  return currency === "LBP" ? num(proof.amount_lbp) : num(proof.amount_usd);
+}
+
+/**
+ * Produces only authorised, workspace-scoped factual inputs before calling the
+ * shared currency-safe monthly derivation exactly once.
+ */
+export function buildMonthlyIntelligenceSummaries(input: {
+  workspaceId: string;
+  invoices: readonly MonthlyIntelligenceInvoice[];
+  clients: readonly MonthlyIntelligenceClient[];
+  reportingMonths: readonly string[];
+}): MonthlyIntelligenceCurrencySummaryResult {
+  const reportingMonthSet = new Set(input.reportingMonths);
+  const billable = input.invoices.filter((invoice) => invoice.workspace_id === input.workspaceId && !isQuoteDocument(invoice));
+  const currencyFacts: MonthlyIntelligenceCurrencyFact[] = [];
+  const sharedFacts: MonthlySharedIntelligenceFact[] = [];
+  const paymentMethodFacts: MonthlyIntelligencePaymentMethodFact[] = [];
+  let paymentSourceOrder = 0;
+
+  for (const invoice of billable) {
+    const createdMonth = monthKeySafe(invoice.created_at);
+    if (createdMonth && reportingMonthSet.has(createdMonth)) {
+      sharedFacts.push({ month: createdMonth, invoicesCreated: 1, newClients: 0 });
+    }
+
+    const collectionInvoice = monthlyCollectionInvoice(invoice);
+    if (isOutstandingInvoice(collectionInvoice) && invoice.due_date && invoice.due_date < todayIso()) {
+      const dueMonth = monthKeySafe(invoice.due_date) ?? monthKeySafe(`${invoice.due_date}T12:00:00`);
+      if (dueMonth && reportingMonthSet.has(dueMonth)) {
+        currencyFacts.push({
+          month: dueMonth,
+          currency: monthlyCurrency(invoice),
+          collected: 0,
+          overdue: getOutstandingBalance(collectionInvoice).primaryBalance
+        });
+      }
+    }
+
+    for (const proof of invoice.payment_proofs || []) {
+      if ((proof.status || "").toLowerCase() !== "accepted") continue;
+      const occurredAt = proof.confirmed_at || proof.uploaded_at;
+      const paymentMonth = monthKeySafe(occurredAt);
+      if (!paymentMonth || !reportingMonthSet.has(paymentMonth)) continue;
+      const currency = monthlyCurrency(invoice);
+      currencyFacts.push({
+        month: paymentMonth,
+        currency,
+        collected: monthlyProofAmount(proof, currency),
+        overdue: 0
+      });
+      paymentMethodFacts.push({ month: paymentMonth, method: methodKey(proof.method), sourceOrder: paymentSourceOrder });
+      paymentSourceOrder += 1;
+    }
+  }
+
+  for (const client of input.clients) {
+    if (client.workspace_id !== input.workspaceId) continue;
+    const createdMonth = monthKeySafe(client.created_at);
+    if (createdMonth && reportingMonthSet.has(createdMonth)) {
+      sharedFacts.push({ month: createdMonth, invoicesCreated: 0, newClients: 1 });
+    }
+  }
+
+  return deriveMonthlyIntelligenceCurrencySummaries({
+    reportingMonths: input.reportingMonths,
+    currencyFacts,
+    sharedFacts,
+    paymentMethodFacts
+  });
+}
 export function buildIntelligenceBundle(input: {
+  workspaceId: string;
   invoices: OCInvoiceRow[];
   events: OCEventRow[];
-  clients: { id: string; name: string | null; created_at: string }[];
+  clients: { id: string; name: string | null; workspace_id?: string | null; created_at: string }[];
 }): IntelligenceBundle {
-  const { invoices, events, clients } = input;
-  const billable = invoices.filter((i) => !isQuoteDocument(i));
-  const quotes = invoices.filter((i) => isQuoteDocument(i));
+  const { invoices, events, clients, workspaceId } = input;
+  const workspaceInvoices = invoices.filter((invoice) => invoice.workspace_id === workspaceId);
+  const billable = workspaceInvoices.filter((i) => !isQuoteDocument(i));
+  const quotes = workspaceInvoices.filter((i) => isQuoteDocument(i));
   const now = Date.now();
 
-  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
-  const last12: { key: string; label: string }[] = [];
+  const last12: { key: string }[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date();
     d.setDate(1);
     d.setHours(0, 0, 0, 0);
     d.setMonth(d.getMonth() - i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    last12.push({ key, label: monthFormatter.format(d) });
+    last12.push({ key });
   }
 
-  const collectedByMonth = new Map<string, number>();
-  const billedByMonth = new Map<string, number>();
-  const overdueByMonth = new Map<string, number>();
-  for (const m of last12) {
-    collectedByMonth.set(m.key, 0);
-    billedByMonth.set(m.key, 0);
-    overdueByMonth.set(m.key, 0);
-  }
-
-  for (const inv of billable) {
-    if (!inv.created_at) continue;
-    const mk = monthKeySafe(inv.created_at);
-    if (mk && billedByMonth.has(mk)) {
-      billedByMonth.set(mk, (billedByMonth.get(mk) || 0) + toApproxUsd(inv, invoiceBilledPrimary(inv)));
-    }
-    const ds = display(inv);
-    if (ds === "overdue" && inv.due_date) {
-      const dk = monthKeySafe(inv.due_date) ?? monthKeySafe(`${inv.due_date}T12:00:00`);
-      const bal = getRemainingBalance(inv as any, rowProofs(inv));
-      if (dk && overdueByMonth.has(dk)) {
-        overdueByMonth.set(dk, (overdueByMonth.get(dk) || 0) + toApproxUsd(inv, bal.primaryBalance));
-      }
-    }
-    for (const p of inv.payment_proofs || []) {
-      if ((p.status || "").toLowerCase() !== "accepted") continue;
-      const conf = p.confirmed_at || p.uploaded_at;
-      if (!conf) continue;
-      const ck = monthKeySafe(conf);
-      if (!ck || !collectedByMonth.has(ck)) continue;
-      collectedByMonth.set(ck, (collectedByMonth.get(ck) || 0) + toApproxUsd(inv, proofPrimaryAmount(p, inv)));
-    }
-  }
-
-  let bestKey: string | null = null;
-  let bestUsd = 0;
-  for (const [k, v] of collectedByMonth) {
-    if (v > bestUsd) {
-      bestUsd = v;
-      bestKey = k;
-    }
-  }
-  const bestLabel = bestKey ? last12.find((x) => x.key === bestKey)?.label ?? bestKey : null;
-
-  const invoiceSizes = billable
-    .map((i) => toApproxUsd(i, invoiceBilledPrimary(i)))
-    .filter((n) => n > 0);
-  const averageInvoiceUsd = invoiceSizes.length ? invoiceSizes.reduce((a, b) => a + b, 0) / invoiceSizes.length : null;
+  const reportingMonths = last12.map((month) => month.key);
+  const currencyCharts = deriveRevenueCurrencyCharts(
+    deriveRevenueCurrencyFacts({ invoices: billable, reportingMonths }),
+    { reportingMonths }
+  );
+  const revenueCurrencyKpis = deriveRevenueCurrencyKpis(
+    deriveRevenueCurrencyKpiFacts({ invoices: billable, reportingMonths })
+  );
 
   const delays: number[] = [];
   for (const inv of billable) {
@@ -290,28 +531,6 @@ export function buildIntelligenceBundle(input: {
     if (first !== Infinity && first >= created) delays.push((first - created) / MS_DAY);
   }
   const averagePaymentDelayDays = delays.length ? delays.reduce((a, b) => a + b, 0) / delays.length : null;
-
-  const last3 = last12.slice(-3);
-  const prev3 = last12.slice(-6, -3);
-  const sumCollected = (keys: typeof last12) => keys.reduce((s, k) => s + (collectedByMonth.get(k.key) || 0), 0);
-  const a = sumCollected(last3) / 3;
-  const b = sumCollected(prev3) / 3;
-  let revenueTrend: RevenueIntelligence["revenueTrend"] = "insufficient_data";
-  if (billable.length >= 6) {
-    if (a > b * 1.08) revenueTrend = "up";
-    else if (a < b * 0.92) revenueTrend = "down";
-    else revenueTrend = "flat";
-  }
-
-  let totalBilled = 0;
-  let totalCollected = 0;
-  for (const inv of billable) {
-    totalBilled += toApproxUsd(inv, invoiceBilledPrimary(inv));
-    for (const p of inv.payment_proofs || []) {
-      if ((p.status || "").toLowerCase() === "accepted") totalCollected += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-    }
-  }
-  const collectedVsBilledRatio = totalBilled > 0 ? totalCollected / totalBilled : null;
 
   const withDep = billable.filter((i) => Boolean(i.deposit_enabled));
   const depPaid = withDep.filter((i) => display(i) === "paid").length;
@@ -423,88 +642,9 @@ export function buildIntelligenceBundle(input: {
     whatsappThenPaidWithin14d
   };
 
-  let c30 = 0;
-  let cPrev = 0;
-  let nLast30 = 0;
-  let nPrev30 = 0;
-  for (const inv of billable) {
-    for (const p of inv.payment_proofs || []) {
-      if ((p.status || "").toLowerCase() !== "accepted") continue;
-      const t = new Date(p.confirmed_at || p.uploaded_at).getTime();
-      if (!Number.isFinite(t)) continue;
-      const age = now - t;
-      if (age < 30 * MS_DAY) {
-        c30 += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-        nLast30 += 1;
-      } else if (age >= 30 * MS_DAY && age < 60 * MS_DAY) {
-        cPrev += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-        nPrev30 += 1;
-      }
-    }
-  }
-
-  const outstandingNow = billable.reduce((s, inv) => {
-    const ds = display(inv);
-    if (!["sent", "unpaid", "partial", "overdue"].includes(ds)) return s;
-    const bal = getRemainingBalance(inv as any, rowProofs(inv));
-    return s + toApproxUsd(inv, bal.primaryBalance);
-  }, 0);
-  const oneMonthAgo = new Date(now - 30 * MS_DAY).toISOString();
-  /** Proxy prior outstanding: invoices still open that were created before 30d ago */
-  const outstandingOlder = billable.reduce((s, inv) => {
-    if (!inv.created_at || inv.created_at >= oneMonthAgo) return s;
-    const ds = display(inv);
-    if (!["sent", "unpaid", "partial", "overdue"].includes(ds)) return s;
-    const bal = getRemainingBalance(inv as any, rowProofs(inv));
-    return s + toApproxUsd(inv, bal.primaryBalance);
-  }, 0);
-
-  const overdueNow = billable.filter((i) => display(i) === "overdue").length;
-  const overduePrior = billable.filter((i) => {
-    if (display(i) !== "overdue" || !i.due_date) return false;
-    return i.due_date < todayIso() && i.due_date >= new Date(now - 30 * MS_DAY).toISOString().slice(0, 10);
-  }).length;
-
-  const clientsWithInvoices = new Set(billable.map((i) => i.client_id).filter(Boolean));
-  const repeatClients = new Set(
-    billable.reduce((acc, inv) => {
-      if (!inv.client_id) return acc;
-      const c = inv.client_id;
-      if (!acc.has(c)) acc.set(c, 0);
-      acc.set(c, (acc.get(c) || 0) + 1);
-      return acc;
-    }, new Map<string, number>())
+  const momentum: MomentumIndicators = deriveMomentumCurrencyIndicators(
+    deriveMomentumCurrencyFacts({ invoices: billable, now, today: todayIso() })
   );
-  let repeat = 0;
-  for (const [, n] of repeatClients) if (n >= 2) repeat += 1;
-  const repeatClientRate =
-    clientsWithInvoices.size > 0 ? repeat / clientsWithInvoices.size : null;
-
-  let paymentVelocityLabel = "Payment velocity";
-  let paymentVelocityDetail: string | null = null;
-  if (nLast30 + nPrev30 >= 4) {
-    if (c30 > cPrev * 1.1) {
-      paymentVelocityLabel = "Collections picked up";
-      paymentVelocityDetail = `~${money(c30, "USD")} recorded on accepted proofs in the last 30 days vs ~${money(cPrev, "USD")} in the prior 30 days (approx. USD equivalent at invoice rates).`;
-    } else if (c30 < cPrev * 0.9 && cPrev > 0) {
-      paymentVelocityLabel = "Collections slowed";
-      paymentVelocityDetail = `Accepted-proof volume (approx. USD equivalent) was lower in the last 30 days than the prior window.`;
-    } else {
-      paymentVelocityLabel = "Steady payment pace";
-      paymentVelocityDetail = `Accepted-proof volume is similar across the last two 30-day windows (approx. USD equivalent).`;
-    }
-  }
-
-  const momentum: MomentumIndicators = {
-    paymentVelocityLabel,
-    paymentVelocityDetail,
-    collectionVelocityUsdLast30: c30,
-    collectionVelocityUsdPrior30: cPrev,
-    outstandingGrowthUsd: outstandingNow - outstandingOlder,
-    overdueCountNow: overdueNow,
-    overdueCountPriorMonth: overduePrior,
-    repeatClientRate
-  };
 
   const recommendations: SmartRecommendation[] = [];
 
@@ -560,60 +700,7 @@ export function buildIntelligenceBundle(input: {
     });
   }
 
-  const monthlyReports: MonthlyReportRow[] = last12.map(({ key, label }) => {
-    const created = billable.filter((i) => i.created_at && monthKeySafe(i.created_at) === key).length;
-    const paidUsd = billable.reduce((s, inv) => {
-      for (const p of inv.payment_proofs || []) {
-        if ((p.status || "").toLowerCase() !== "accepted") continue;
-        const conf = p.confirmed_at || p.uploaded_at;
-        const confMk = conf ? monthKeySafe(conf) : null;
-        if (!confMk || confMk !== key) continue;
-        s += toApproxUsd(inv, proofPrimaryAmount(p, inv));
-      }
-      return s;
-    }, 0);
-    const overdueUsd = billable
-      .filter((i) => {
-        if (display(i) !== "overdue" || !i.due_date) return false;
-        const dm = monthKeySafe(i.due_date) ?? monthKeySafe(`${i.due_date}T12:00:00`);
-        return dm === key;
-      })
-      .reduce((s, i) => {
-        const bal = getRemainingBalance(i as any, rowProofs(i));
-        return s + toApproxUsd(i, bal.primaryBalance);
-      }, 0);
-    const newClients = clients.filter((c) => c.created_at && monthKeySafe(c.created_at) === key).length;
-    const methodUse = new Map<string, number>();
-    for (const inv of billable) {
-      for (const p of inv.payment_proofs || []) {
-        if ((p.status || "").toLowerCase() !== "accepted") continue;
-        const conf = p.confirmed_at || p.uploaded_at;
-        const confMk = conf ? monthKeySafe(conf) : null;
-        if (!confMk || confMk !== key) continue;
-        const mk = methodKey(p.method);
-        methodUse.set(mk, (methodUse.get(mk) || 0) + 1);
-      }
-    }
-    let topMethod: string | null = null;
-    let topC = 0;
-    for (const [m, c] of methodUse) if (c > topC) { topMethod = m; topC = c; }
-
-    const opsIssues =
-      (collectedByMonth.get(key) || 0) > 0 && overdueUsd > (collectedByMonth.get(key) || 0)
-        ? 1
-        : overdueUsd > 0 ? 1 : 0;
-
-    return {
-      monthKey: key,
-      monthLabel: label,
-      invoicesCreated: created,
-      paidTotalUsd: paidUsd,
-      overdueTotalUsd: overdueUsd,
-      newClients,
-      topMethod,
-      operationalIssues: opsIssues
-    };
-  });
+  const monthlyReports = buildMonthlyIntelligenceSummaries({ workspaceId, invoices, clients, reportingMonths });
 
   const reminderLast = new Map<string, string>();
   for (const e of events) {
@@ -632,17 +719,18 @@ export function buildIntelligenceBundle(input: {
     staleDrafts: []
   };
 
-  const clientRisk = new Map<string, { late: number; overdue: number; openUsd: number; name: string }>();
+  const clientRisk = new Map<string, { late: number; overdue: number; openByCurrency: Record<"USD" | "LBP", number>; name: string }>();
   for (const inv of billable) {
     if (!inv.client_id || !inv.clients?.name) continue;
     const cid = inv.client_id;
-    if (!clientRisk.has(cid)) clientRisk.set(cid, { late: 0, overdue: 0, openUsd: 0, name: inv.clients.name });
+    if (!clientRisk.has(cid)) clientRisk.set(cid, { late: 0, overdue: 0, openByCurrency: { USD: 0, LBP: 0 }, name: inv.clients.name });
     const row = clientRisk.get(cid)!;
     const ds = display(inv);
     if (ds === "overdue") row.overdue += 1;
     if (["sent", "unpaid", "partial", "overdue"].includes(ds)) {
-      const bal = getRemainingBalance(inv as any, rowProofs(inv));
-      row.openUsd += toApproxUsd(inv, bal.primaryBalance);
+      const balance = remainingBalance(inv);
+      const currency = invoiceCurrency(inv);
+      if (currency) row.openByCurrency[currency] += currency === "USD" ? balance.usd : balance.lbp;
     }
     for (const p of inv.payment_proofs || []) {
       if ((p.status || "").toLowerCase() !== "accepted" || !inv.due_date || !p.payment_date) continue;
@@ -651,18 +739,20 @@ export function buildIntelligenceBundle(input: {
   }
   for (const [cid, row] of clientRisk) {
     if (row.late >= 2) operational.latePayers.push({ id: cid, label: row.name, href: `/clients/${cid}`, meta: `${row.late} late payments` });
-    if (row.overdue >= 2 || row.openUsd >= 5000)
+    if (row.overdue >= 2 || row.openByCurrency.USD >= 5000)
       operational.riskyClients.push({ id: cid, label: row.name, href: `/clients/${cid}`, meta: `${row.overdue} overdue` });
   }
 
   for (const inv of billable) {
-    const approxBilled = toApproxUsd(inv, invoiceBilledPrimary(inv));
-    if (approxBilled >= 5000 && display(inv) !== "paid") {
+    const currency = invoiceCurrency(inv);
+    const balance = remainingBalance(inv);
+    const outstanding = currency === "USD" ? balance.usd : currency === "LBP" ? balance.lbp : null;
+    if (currency === "USD" && outstanding !== null && outstanding >= 5000 && ["sent", "unpaid", "partial", "overdue"].includes(display(inv))) {
       operational.highValueInvoices.push({
         id: inv.id,
         label: invoiceTitle(inv),
         href: `/invoices/${inv.id}`,
-        meta: money(invoiceBilledPrimary(inv), invPrimaryCur(inv))
+        meta: money(outstanding, currency)
       });
     }
     const lastRem = reminderLast.get(inv.id);
@@ -723,7 +813,7 @@ export function buildIntelligenceBundle(input: {
     if (invs.length >= 2 && paidN >= invs.length - 1 && daysSince < 120) segments.push("growing");
     if (row.overdue >= 1 || row.late >= 2) segments.push("at_risk");
     if (daysSince > 120 && paidN === 0) segments.push("inactive");
-    if (row.openUsd >= 8000) segments.push("high_value");
+    if (row.openByCurrency.USD >= 8000) segments.push("high_value");
     if (segments.length) {
       clientSegmentation.push({
         clientId: cid,
@@ -735,40 +825,29 @@ export function buildIntelligenceBundle(input: {
   }
   clientSegmentation.sort((a, b) => b.segments.length - a.segments.length);
 
-  const stackedMethods: StackedMethodMonth[] = last12.slice(-6).map(({ key, label }) => {
-    const stacks: Record<string, number> = {};
-    const methodTotals = new Map<string, number>();
-    for (const inv of billable) {
-      for (const p of inv.payment_proofs || []) {
-        if ((p.status || "").toLowerCase() !== "accepted") continue;
-        const conf = p.confirmed_at || p.uploaded_at;
-        const confMk = conf ? monthKeySafe(conf) : null;
-        if (!confMk || confMk !== key) continue;
-        const mk = methodKey(p.method);
-        methodTotals.set(mk, (methodTotals.get(mk) || 0) + toApproxUsd(inv, proofPrimaryAmount(p, inv)));
-      }
+  const chartMonths = new Set(last12.slice(-6).map((month) => month.key));
+  const paymentMethodFacts: MonthlyPaymentMethodCurrencyTotal[] = [];
+  for (const invoice of billable) {
+    const currency = String(invoice.currency || "").trim().toUpperCase();
+    for (const proof of invoice.payment_proofs || []) {
+      if (!isAcceptedNonVoidedPayment(proof)) continue;
+      const month = monthKeySafe(proof.confirmed_at || proof.uploaded_at);
+      if (!month || !chartMonths.has(month)) continue;
+      paymentMethodFacts.push({
+        month,
+        method: methodKey(proof.method),
+        currency,
+        amount: currency === "LBP" ? num(proof.amount_lbp) : currency === "USD" ? num(proof.amount_usd) : 0
+      });
     }
-    const top = [...methodTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-    let other = 0;
-    for (const [m, v] of methodTotals) {
-      if (top.some(([tm]) => tm === m)) stacks[m] = v;
-      else other += v;
-    }
-    if (other > 0) stacks["Other"] = other;
-    return { key, label, stacks };
-  });
+  }
+  const paymentMethodCurrencyCharts = derivePaymentMethodCurrencyCharts(paymentMethodFacts);
 
   const revenue: RevenueIntelligence = {
-    bestEarningMonthLabel: bestLabel,
-    bestEarningMonthUsd: bestUsd,
-    averageInvoiceUsd,
+    revenueCurrencyKpis,
     averagePaymentDelayDays,
-    revenueTrend,
-    collectedVsBilledRatio,
     depositConversionRate,
-    collectedByMonth: last12.map((m) => ({ ...m, usd: collectedByMonth.get(m.key) || 0 })),
-    billedByMonth: last12.map((m) => ({ ...m, usd: billedByMonth.get(m.key) || 0 })),
-    overdueByMonth: last12.map((m) => ({ ...m, usd: overdueByMonth.get(m.key) || 0 }))
+    currencyCharts
   };
 
   return {
@@ -781,7 +860,7 @@ export function buildIntelligenceBundle(input: {
     monthlyReports,
     operational,
     clientSegmentation,
-    stackedMethods
+    paymentMethodCurrencyCharts
   };
 }
 
@@ -881,42 +960,34 @@ export function buildClientIntelligence(input: {
   };
 }
 
-export function monthlyReportToCsv(row: MonthlyReportRow): string {
-  /** Amount columns: approx. USD equivalent (LBP converted at each invoice's rate). */
+export function monthlyReportToCsv(monthKey: string, summaries: MonthlyIntelligenceCurrencySummaryResult): string {
   const headers = [
     "month",
+    "currency",
+    "collected",
+    "overdue",
     "invoices_created",
-    "paid_total_usd",
-    "overdue_total_usd",
     "new_clients",
     "top_payment_method",
     "operational_issue_flag"
   ];
-  const line = [
-    csvEscapeCell(row.monthKey),
-    String(row.invoicesCreated),
-    csvNumber(row.paidTotalUsd),
-    csvNumber(row.overdueTotalUsd),
-    String(row.newClients),
-    csvEscapeCell(row.topMethod || ""),
-    String(row.operationalIssues)
-  ];
-  return `${headers.join(",")}\n${line.join(",")}\n`;
+  const shared = summaries.sharedSummaries.find((summary) => summary.month === monthKey);
+  const lines = summaries.currencySummaries
+    .filter((summary) => summary.month === monthKey)
+    .sort((left, right) => left.month.localeCompare(right.month) || left.currency.localeCompare(right.currency))
+    .map((summary) => [
+      csvEscapeCell(summary.month),
+      csvEscapeCell(summary.currency),
+      csvNumber(summary.collected),
+      csvNumber(summary.overdue),
+      String(shared?.invoicesCreated || 0),
+      String(shared?.newClients || 0),
+      csvEscapeCell(shared?.topMethod || ""),
+      String(shared?.operationalIssues || 0)
+    ].join(","));
+  return `${headers.join(",")}\n${lines.join("\n")}${lines.length ? "\n" : ""}`;
 }
 
-export function buildMonthlyReportCsv(monthKey: string, rows: MonthlyReportRow[]): string {
-  const row = rows.find((r) => r.monthKey === monthKey);
-  if (!row) {
-    return monthlyReportToCsv({
-      monthKey,
-      monthLabel: monthKey,
-      invoicesCreated: 0,
-      paidTotalUsd: 0,
-      overdueTotalUsd: 0,
-      newClients: 0,
-      topMethod: null,
-      operationalIssues: 0
-    });
-  }
-  return monthlyReportToCsv(row);
+export function buildMonthlyReportCsv(monthKey: string, summaries: MonthlyIntelligenceCurrencySummaryResult): string {
+  return monthlyReportToCsv(monthKey, summaries);
 }

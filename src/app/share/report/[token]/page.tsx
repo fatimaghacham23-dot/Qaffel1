@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { BarChart3, CalendarDays, FileText } from "lucide-react";
 import { BusinessLogoOrMonogram } from "@/components/brand/BusinessLogoOrMonogram";
 import { BrandedPublicSurface } from "@/components/brand/BrandedPublicSurface";
@@ -8,6 +9,13 @@ import { humanReportType } from "@/lib/connectivity";
 import { money, shortDate } from "@/lib/format";
 import { normalizeDocumentTheme, sanitizeHexColor } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
+import { buildSharedReportUrl } from "@/lib/urls";
+
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const canonicalUrl = buildSharedReportUrl(token);
+  return { alternates: { canonical: canonicalUrl }, openGraph: { url: canonicalUrl }, robots: { index: false, follow: false } };
+}
 
 type PublicSharedReport = {
   report_type: string;

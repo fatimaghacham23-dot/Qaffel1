@@ -1,10 +1,10 @@
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import { supabaseServiceRoleKey, supabaseUrl } from "@/lib/env";
+import { supabaseUrl } from "@/lib/env-public";
+import { getServerEnvironment } from "@/lib/env-server";
 
 export function createAdminClient() {
-  if (!supabaseServiceRoleKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for server-side billing sync.");
-  }
+  const { supabaseServiceRoleKey } = getServerEnvironment();
 
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {

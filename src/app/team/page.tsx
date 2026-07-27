@@ -5,6 +5,11 @@ import { ROLE_LABELS, ROLE_DESCRIPTIONS, ASSIGNABLE_ROLES } from "@/lib/permissi
 import { redirect } from "next/navigation";
 import { TeamMemberList } from "@/components/TeamMemberList";
 import { InviteTeammateForm } from "@/components/InviteTeammateForm";
+import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { deriveTeamRoster } from "@/lib/team-roster";
+import { TeamSummary } from "@/components/TeamSummary";
 
 export default async function TeamPage() {
   const { supabase } = await requireUser();
@@ -16,81 +21,52 @@ export default async function TeamPage() {
 
   const canManage = hasPermission(ctx.role, "team.manage");
 
-  // Fetch workspace members
-  const { data: members } = await supabase
-    .from("workspace_members")
-    .select("id, user_id, role, status, invited_at, accepted_at, profiles!inner(full_name, business_name)")
-    .eq("workspace_id", ctx.workspaceId)
-    .neq("status", "removed")
-    .order("created_at", { ascending: true });
-
-  // Fetch pending invitations
-  const { data: invitations } = canManage
-    ? await supabase
-        .from("workspace_invitations")
-        .select("id, email, role, invited_by, expires_at, accepted_at, created_at")
-        .eq("workspace_id", ctx.workspaceId)
-        .is("accepted_at", null)
-        .order("created_at", { ascending: false })
-    : { data: [] };
-
-  return (
-    <main className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="q-elevated bg-white/[0.72] p-6 backdrop-blur-md sm:p-7">
-        <p className="q-section-label mb-2 text-cedar">Workspace</p>
-        <h1 className="page-title">Team</h1>
-        <p className="q-subtitle mt-2.5 max-w-2xl">
-          Manage your workspace team. Invite teammates, assign roles, and control access to your operational data.
-        </p>
-      </div>
+  const [{ data: workspace }, { data: members }, { data: invitations }] = await Promise.all([
+    supabase.from("workspaces").select("owner_id").eq("id", ctx.workspaceId).maybeSingle(),
+    supabase.from("workspace_members").select("id, user_id, role, status, invited_at, accepted_at, profiles!inner(full_name, business_name, email)").eq("workspace_id", ctx.workspaceId).neq("status", "removed").order("created_at", { ascending: true }).limit(200),
+    canManage ? supabase.from("workspace_invitations").select("id, email, role, invited_by, expires_at, accepted_at, created_at").eq("workspace_id", ctx.workspaceId).is("accepted_at", null).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [] })
+  ]);
+  const ownerId = workspace?.owner_id || null;
+  const { data: ownerProfile } = ownerId ? await supabase.from("profiles").select("full_name, email").eq("id", ownerId).maybeSingle() : { data: null };
+  const roster = deriveTeamRoster({ workspaceId: ctx.workspaceId, ownerId, ownerProfile: ownerProfile ? { fullName: ownerProfile.full_name, email: ownerProfile.email } : null, memberships: (members || []).map((member) => ({ workspaceId: ctx.workspaceId, userId: member.user_id, role: member.role as typeof ctx.role, status: member.status, profile: { fullName: (member.profiles as { full_name?: string } | null)?.full_name, email: (member.profiles as { email?: string } | null)?.email } })), pendingInvitations: (invitations || []).map((invitation) => ({ key: invitation.id, email: invitation.email, role: invitation.role, status: "pending" })), viewerRole: ctx.role });  return (
+    <AppShell role={ctx.role}><PageContainer width="wide" className="space-y-8 py-2"><PageHeader eyebrow="Workspace" title="Team" description="Manage your workspace team. Invite teammates, assign roles, and control access to your operational data." />
 
       {/* Team members */}
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-ink">
-            Members
-            <span className="ml-2 text-sm font-normal text-slate-400">
-              {members?.length ?? 0}
-            </span>
+            People <span className="ms-2 text-sm font-normal text-slate-400">{roster.totalPeople}</span>
+            <TeamSummary additionalMemberCount={roster.additionalMemberCount} pendingInvitationCount={roster.pendingInvitationCount} />
           </h2>
         </div>
         <TeamMemberList
-          members={(members ?? []).map((m) => ({
-            id: m.id,
-            userId: m.user_id,
-            role: m.role,
-            status: m.status,
-            invitedAt: m.invited_at,
-            acceptedAt: m.accepted_at,
-            fullName: (m.profiles as unknown as { full_name: string })?.full_name ?? "Unknown",
-          }))}
-          currentUserId={ctx.userId}
+          members={[...(roster.owner ? [{ id: roster.owner.key, userId: ownerId || "", role: "owner", status: roster.owner.status, invitedAt: "", acceptedAt: null, fullName: roster.owner.displayName }] : []), ...roster.members.map((member) => ({ id: member.key, userId: member.key, role: member.role, status: member.status, invitedAt: "", acceptedAt: null, fullName: member.displayName }))]}          currentUserId={ctx.userId}
           currentRole={ctx.role}
           workspaceId={ctx.workspaceId}
           canManage={canManage}
         />
       </section>
 
+      {roster.additionalMemberCount === 0 ? <p className="-mt-2 text-sm text-slate-500">No additional members yet.</p> : null}
+
       {/* Pending invitations */}
-      {canManage && invitations && invitations.length > 0 ? (
+      {canManage && roster.pendingInvitations.length > 0 ? (
         <section>
           <h2 className="mb-4 text-base font-semibold text-ink">
             Pending invitations
-            <span className="ml-2 text-sm font-normal text-slate-400">{invitations.length}</span>
+            <span className="ml-2 text-sm font-normal text-slate-400">{roster.pendingInvitationCount}</span>
           </h2>
           <div className="space-y-2">
-            {invitations.map((inv) => (
+            {roster.pendingInvitations.map((inv) => (
               <div
-                key={inv.id}
-                className="flex items-center justify-between rounded-xl border border-slate-200/50 bg-white/80 px-4 py-3"
+                key={inv.key}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/50 bg-white/80 px-4 py-3"
                 style={{ boxShadow: "var(--q-shadow-xs)" }}
               >
                 <div>
                   <p className="text-sm font-medium text-ink">{inv.email}</p>
                   <p className="text-xs text-slate-400">
                     Invited as {ROLE_LABELS[inv.role as keyof typeof ROLE_LABELS] ?? inv.role}
-                    {inv.expires_at ? ` · Expires ${new Date(inv.expires_at).toLocaleDateString()}` : ""}
                   </p>
                 </div>
                 <span className="rounded-full border border-amber-200/50 bg-amber-50/60 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
@@ -126,6 +102,6 @@ export default async function TeamPage() {
           ))}
         </div>
       </section>
-    </main>
+    </PageContainer></AppShell>
   );
 }

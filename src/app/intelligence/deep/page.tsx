@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/supabase/server";
+import { getWorkspaceContext } from "@/lib/get-workspace";
 import { buildIntelligenceBundle } from "@/lib/intelligence-layer";
 import type { OCInvoiceRow } from "@/lib/operations-center";
 
@@ -38,27 +39,28 @@ function ListBlock({
 }
 
 export default async function IntelligenceDeepPage() {
-  const { supabase, user } = await requireUser();
+  const [{ supabase }, ctx] = await Promise.all([requireUser(), getWorkspaceContext()]);
   const [{ data: invoices }, { data: events }, { data: clients }] = await Promise.all([
     supabase
       .from("invoices")
       .select(
         "*, exchange_rate_lbp_per_usd, clients(id, name, phone, email), payment_proofs(id, status, amount_usd, amount_lbp, uploaded_at, confirmed_at, payment_date, method, voided_at)"
       )
-      .eq("user_id", user.id),
+      .eq("workspace_id", ctx.workspaceId),
     supabase
       .from("invoice_events")
       .select("id, invoice_id, event_type, message, created_at, metadata")
-      .eq("user_id", user.id)
+      .eq("workspace_id", ctx.workspaceId)
       .order("created_at", { ascending: false })
       .limit(2000),
-    supabase.from("clients").select("id, name, created_at").eq("user_id", user.id)
+    supabase.from("clients").select("id, name, workspace_id, created_at").eq("workspace_id", ctx.workspaceId)
   ]);
 
   const bundle = buildIntelligenceBundle({
+    workspaceId: ctx.workspaceId,
     invoices: (invoices || []) as OCInvoiceRow[],
     events: (events || []) as any,
-    clients: (clients || []) as { id: string; name: string | null; created_at: string }[]
+    clients: (clients || []) as { id: string; name: string | null; workspace_id?: string | null; created_at: string }[]
   });
 
   const op = bundle.operational;
@@ -80,7 +82,7 @@ export default async function IntelligenceDeepPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <ListBlock title="Late payers (clients)" items={op.latePayers} empty="No multi-late-payment pattern detected." />
         <ListBlock title="Risky clients" items={op.riskyClients} empty="No high-risk client rollup right now." />
-        <ListBlock title="High-value open invoices (≥ $5k)" items={op.highValueInvoices} empty="No large open invoices flagged." />
+        <ListBlock title="High-value open USD invoices (≥ $5k)" items={op.highValueInvoices} empty="No large open invoices flagged." />
         <ListBlock title="No reminder logged (10d+)" items={op.noFollowUpInvoices} empty="All tracked invoices have a reminder or are new." />
         <ListBlock title="Multiple rejected proofs" items={op.multipleRejectedProofs} empty="No invoices with 2+ rejections." />
         <ListBlock title="Overpaid balances" items={op.overpaidInvoices} empty="No overpayment detected on primary currency." />

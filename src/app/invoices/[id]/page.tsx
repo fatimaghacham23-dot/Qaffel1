@@ -16,6 +16,9 @@ import {
   duplicateInvoiceAction
 } from "@/app/actions";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { ResponsiveGrid } from "@/components/layout/ResponsiveGrid";
 import { InvoicePriorityBadges } from "@/components/InvoicePriorityBadges";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ProofReviewForm } from "@/components/ProofReviewForm";
@@ -23,6 +26,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { ManualPaymentForm } from "@/components/ManualPaymentForm";
 import { VoidPaymentButton } from "@/components/VoidPaymentButton";
 import { FollowUpSection } from "@/components/FollowUpSection";
+import { buildPaymentUrl, buildReceiptUrl } from "@/lib/urls";
 import { ExtendInvoiceValidityForm } from "@/components/ExtendInvoiceValidityForm";
 import { InvoiceDepositFields } from "@/components/InvoiceDepositFields";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
@@ -46,7 +50,7 @@ import { parsePaymentPlan } from "@/lib/payment-plan";
 import { getWorkspaceContext } from "@/lib/get-workspace";
 import { hasPermission } from "@/lib/permissions";
 import {
-  computeRecoveryForInvoice,
+  deriveRecoveryEngineCurrencyModel,
   recoveryNextActionLabel,
   recoveryTierLabel,
   responsivenessLabel,
@@ -141,7 +145,7 @@ export default async function InvoiceDetailPage({
     supabase
       .from("invoices")
       .select(
-        "id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, exchange_rate_lbp_per_usd, payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
+        "id, workspace_id, client_id, status, created_at, document_type, currency, amount_usd, amount_lbp, due_date, valid_until, deposit_enabled, deposit_type, deposit_percent, deposit_amount_usd, deposit_amount_lbp, payment_proofs(status, amount_usd, amount_lbp, confirmed_at, uploaded_at)"
       )
       .eq("workspace_id", ctx.workspaceId),
     supabase
@@ -237,12 +241,13 @@ export default async function InvoiceDetailPage({
       metadata: (e.metadata as Record<string, unknown>) || null
     })
   );
-  const recovery = computeRecoveryForInvoice({
-    invoice: recoveryInvoiceRow,
-    proofs: minimalProofs,
+  const recoveryModel = deriveRecoveryEngineCurrencyModel({
+    workspaceId: ctx.workspaceId,
+    invoices: [{ ...recoveryInvoiceRow, workspace_id: ctx.workspaceId }, ...recoveryAll.map((row) => ({ ...row, workspace_id: ctx.workspaceId, payment_proofs: row.payment_proofs || [] }))],
     events: recoveryEvents,
-    allUserInvoices: recoveryAll.map((r) => ({ ...r, payment_proofs: r.payment_proofs || [] }))
+    nowMs: new Date().getTime()
   });
+  const recovery = recoveryModel.currencyGroups.flatMap((group) => group.candidates).find((candidate) => candidate.candidateKey === recoveryInvoiceRow.id) || null;
   const isQuote = isQuoteDocument(invoice);
   const displayStatus = isQuote
     ? documentStatus({ ...invoice, status: reconciledStatus })
@@ -280,7 +285,7 @@ export default async function InvoiceDetailPage({
   const hasPaymentMethods = (methods || []).length > 0;
   const acceptedProofs = proofsWithSignedUrls.filter((proof) => proof.status === "accepted");
   const voidedProofs = proofsWithSignedUrls.filter((proof) => proof.status === "voided");
-  const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pay/${invoice.public_token}`;
+  const publicUrl = buildPaymentUrl(invoice.public_token);
   const clientEmail = invoice.clients?.email;
   const clientPhone = invoice.clients?.phone;
   const pendingProofCount = proofsWithSignedUrls.filter((proof) => proof.status === "pending").length;
@@ -410,11 +415,10 @@ export default async function InvoiceDetailPage({
 
   return (
     <AppShell>
+      <PageContainer width="wide">
+      <PageHeader backHref="/invoices" breadcrumbs={[{ label: "Invoices", href: "/invoices" }, { label: nounTitle }]} eyebrow={nounTitle} title={invoice.invoice_number ? `${invoice.invoice_number} - ${invoice.title}` : invoice.title} badge={<div className="flex flex-wrap items-center gap-2"><StatusBadge status={displayStatus} label={friendlyLifecycle} /><StatusBadge status={isQuote ? "quote" : "active"} label={nounTitle} /></div>} />
       <div className="mb-6">
-        <Link className="text-sm font-semibold text-cedar print:hidden" href="/invoices">
-          Back to invoices
-        </Link>
-        <section className="mt-3 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
           <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:p-6">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -424,9 +428,7 @@ export default async function InvoiceDetailPage({
                   <StatusBadge status={invoice.approval_status} label={`Approval: ${invoice.approval_status}`} />
                 ) : null}
               </div>
-              <h1 className="mt-4 break-words text-3xl font-bold tracking-normal text-ink lg:text-4xl">
-                {invoice.invoice_number ? `${invoice.invoice_number} - ${invoice.title}` : invoice.title}
-              </h1>
+              <p className="mt-4 break-words text-lg font-semibold text-ink">{invoice.title}</p>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <span className="font-semibold text-ink">{invoice.clients?.name || "No client selected"}</span>
                 <span>Created {shortDate(invoice.created_at)}</span>
@@ -518,7 +520,7 @@ export default async function InvoiceDetailPage({
         </div>
       )}
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <ResponsiveGrid className="mb-6" tabletColumns={2} desktopColumns={3}>
         <SummaryCard
           label={`${nounTitle} amount`}
           value={invoice.currency === "USD" ? money(invoice.amount_usd, "USD") : money(invoice.amount_lbp, "LBP")}
@@ -545,7 +547,7 @@ export default async function InvoiceDetailPage({
             />
           </>
         )}
-      </div>
+      </ResponsiveGrid>
 
       {!isQuote && depositStatus && (
         <section className="panel mb-6 border-sky-100 bg-sky-50/70">
@@ -605,7 +607,7 @@ export default async function InvoiceDetailPage({
                 <div>
                   <h2 className="text-lg font-bold text-ink">Recovery overview</h2>
                   <p className="mt-1 text-xs text-slate-600">
-                    Priority tier: {recoveryTierLabel(recovery.tier)}. Derived from due dates,
+                    {recovery.tier ? `Priority tier: ${recoveryTierLabel(recovery.tier)}.` : "Priority score unavailable. No native amount threshold configured for this currency."} Derived from due dates,
                     balances, reminders you copied, portal views, and this client&apos;s paid history.
                   </p>
                 </div>
@@ -655,6 +657,7 @@ export default async function InvoiceDetailPage({
               lastReminder={lastReminder}
               events={(events || []) as any}
               proofs={proofsWithSignedUrls as any}
+              paymentUrl={publicUrl}
             />
           )}
 
@@ -905,7 +908,7 @@ export default async function InvoiceDetailPage({
                           Open receipt
                         </Link>
                         <CopyLinkButton 
-                          value={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/receipt/${proof.receipt_token}`} 
+                          value={buildReceiptUrl(proof.receipt_token)}
                           label="Copy link" 
                           className="btn btn-secondary text-[10px] py-1 px-2" 
                         />
@@ -934,6 +937,7 @@ export default async function InvoiceDetailPage({
           </form>
         </div>
       </section>
+      </PageContainer>
     </AppShell>
   );
 }
