@@ -528,7 +528,7 @@ export default async function PublicInvoicePage({
               </div>
             )}
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,400px)]">
               <section className="q-surface p-4 sm:p-6">
                 <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-ink">
                   <FileText className="h-5 w-5 text-cedar" aria-hidden />
@@ -567,7 +567,7 @@ export default async function PublicInvoicePage({
                 )}
               </section>
 
-              <section className="q-panel p-4 sm:p-5 lg:sticky lg:top-6 lg:self-start" id="proof-upload">
+              <section className="q-panel min-w-0 p-4 sm:p-5 lg:sticky lg:top-6 lg:self-start" id="proof-upload">
                 <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
                   <UploadCloud className="h-5 w-5 text-cedar" aria-hidden />
                   {isQuote ? "Quote status" : "Upload proof"}

@@ -1043,12 +1043,12 @@ export function PaymentProofsTable({
                         <ProofAssignmentBadges assignments={proof.assignments} />
                       </TableCell>
                       <TableCell className="max-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-700">
+                        <span className="block break-words text-sm font-medium text-slate-700">
                           {proof.invoices?.clients?.name || "No client"}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="block truncate text-sm font-semibold text-ink">{proofAmount(proof)}</span>
+                        <span className="block break-words text-sm font-semibold text-ink">{proofAmount(proof)}</span>
                         {proof.payment_date ? (
                           <span className="block truncate text-xs text-slate-500">Paid {shortDate(proof.payment_date)}</span>
                         ) : null}

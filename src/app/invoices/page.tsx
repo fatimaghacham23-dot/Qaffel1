@@ -78,7 +78,7 @@ export default async function InvoicesPage() {
               Recovery center
             </Link>
             <Link className="btn btn-primary w-full sm:w-auto" href="/invoices/new">
-              New document
+              New invoice
             </Link>
           </div>
         }
