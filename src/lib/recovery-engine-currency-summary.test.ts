@@ -166,6 +166,32 @@ describe("currency-safe Recovery Engine contract", () => {
     expect(candidate).not.toHaveProperty("signedUrl");
   });
 
+  it("keeps Recoveries candidate sections currency-first while preserving bucket headings, actions, and score states", () => {
+    const pageSource = readFileSync(resolve(process.cwd(), "src/app/recoveries/page.tsx"), "utf8");
+    const grouped = deriveRecoveryEngineCurrencyResult(input([
+      fact({ candidateKey: "usd", currency: "USD", amountPriorityRatio: 1 }),
+      fact({ candidateKey: "lbp", currency: "LBP", outstanding: 9_000_000, amountPriorityRatio: null })
+    ]));
+    const usdGroup = grouped.currencyGroups.find((group) => group.currency === "USD");
+    const lbpGroup = grouped.currencyGroups.find((group) => group.currency === "LBP");
+
+    expect(usdGroup?.candidates.every((candidate) => candidate.currency === "USD")).toBe(true);
+    expect(lbpGroup?.candidates.every((candidate) => candidate.currency === "LBP")).toBe(true);
+    expect(deriveRecoveryEngineCurrencyResult(input([fact({ currency: "USD" })])).currencyGroups.map((group) => group.currency)).toEqual(["USD"]);
+    expect(pageSource).toContain("recoveryModel.currencyGroups.map((currencyGroup) => {");
+    expect(pageSource).toContain("Recovery candidates — {currencyGroup.currency}");
+    expect(pageSource).toContain("currencyGroup.candidates.filter((candidate) => candidate.bucket === \"recent\")");
+    expect(pageSource).toContain("aria-labelledby={`recovery-currency-${currencyGroup.currency}`}");
+    expect(pageSource).toContain("aria-labelledby={`recovery-${currencyGroup.currency}-${bucket}`}");
+    expect(pageSource).toContain("Priority score unavailable");
+    expect(pageSource).toContain("Priority score: ${c.priorityScore}");
+    expect(pageSource).toContain("href={`/invoices/${inv.id}`}");
+    expect(pageSource).toContain("assignOperationalWorkAction");
+    expect(pageSource).toContain("No overdue balances right now");
+    expect(pageSource.indexOf("recoveryModel.currencyGroups.map((currencyGroup) => {")).toBeLessThan(
+      pageSource.indexOf("currencyGroup.candidates.filter((candidate) => candidate.bucket === \"recent\")")
+    );
+  });
   it("contains no conversion helper, exchange-rate constant, combined total, or active runtime import", () => {
     const source = readFileSync(resolve(process.cwd(), "src/lib/recovery-engine-currency-summary.ts"), "utf8");
 

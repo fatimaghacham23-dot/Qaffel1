@@ -80,10 +80,10 @@ export default async function RecoveriesPage() {
     if (p.total > 0 && p.remaining <= (inv.currency === "USD" ? 0.05 : 500)) plansAllMilestonesMarked += 1;
   }
 
-  const byBucket = {
-    recent: computations.filter((c) => c.bucket === "recent"),
-    aging: computations.filter((c) => c.bucket === "aging"),
-    critical: computations.filter((c) => c.bucket === "critical")
+  const recoveryBucketCounts = {
+    recent: computations.filter((c) => c.bucket === "recent").length,
+    aging: computations.filter((c) => c.bucket === "aging").length,
+    critical: computations.filter((c) => c.bucket === "critical").length
   };
 
   const invById = new Map(rows.map((i) => [i.id, i]));
@@ -135,15 +135,15 @@ export default async function RecoveriesPage() {
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex justify-between">
               <span>Recently overdue</span>
-              <span className="font-semibold">{byBucket.recent.length}</span>
+              <span className="font-semibold">{recoveryBucketCounts.recent}</span>
             </li>
             <li className="flex justify-between">
               <span>Aging overdue</span>
-              <span className="font-semibold">{byBucket.aging.length}</span>
+              <span className="font-semibold">{recoveryBucketCounts.aging}</span>
             </li>
             <li className="flex justify-between">
               <span>Critical overdue</span>
-              <span className="font-semibold">{byBucket.critical.length}</span>
+              <span className="font-semibold">{recoveryBucketCounts.critical}</span>
             </li>
             <li className="flex justify-between border-t border-slate-100 pt-2">
               <span>Manual plans — milestones all marked</span>
@@ -175,12 +175,24 @@ export default async function RecoveriesPage() {
         </section>
       </div>
 
-      {(["recent", "aging", "critical"] as const).map((bucket) => {
-        const list = byBucket[bucket];
-        if (!list.length) return null;
+      {recoveryModel.currencyGroups.map((currencyGroup) => {
+        const byBucket = {
+          recent: currencyGroup.candidates.filter((candidate) => candidate.bucket === "recent"),
+          aging: currencyGroup.candidates.filter((candidate) => candidate.bucket === "aging"),
+          critical: currencyGroup.candidates.filter((candidate) => candidate.bucket === "critical")
+        };
+
         return (
-          <section key={bucket} className="mb-8">
-            <h2 className="q-headline mb-4">{bucketTitle(bucket)}</h2>
+          <section key={currencyGroup.currency} className="mb-10" aria-labelledby={`recovery-currency-${currencyGroup.currency}`}>
+            <h2 id={`recovery-currency-${currencyGroup.currency}`} className="q-headline mb-5">
+              Recovery candidates — {currencyGroup.currency}
+            </h2>
+            {(["recent", "aging", "critical"] as const).map((bucket) => {
+              const list = byBucket[bucket];
+              if (!list.length) return null;
+              return (
+                <section key={bucket} className="mb-8" aria-labelledby={`recovery-${currencyGroup.currency}-${bucket}`}>
+                  <h3 id={`recovery-${currencyGroup.currency}-${bucket}`} className="q-headline mb-4">{bucketTitle(bucket)}</h3>
             <div className="grid gap-4">
               {list.map((c) => {
                 const inv = invById.get(c.candidateKey);
@@ -307,6 +319,9 @@ export default async function RecoveriesPage() {
                 );
               })}
             </div>
+                </section>
+              );
+            })}
           </section>
         );
       })}
