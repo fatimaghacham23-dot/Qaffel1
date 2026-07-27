@@ -132,6 +132,7 @@ export default async function RecoveriesPage() {
       <div className="mb-7 grid gap-5 lg:grid-cols-2">
         <section className="q-surface p-5">
           <h2 className="q-section-label">Recovery funnel (buckets)</h2>
+          <p className="mt-1 text-xs text-slate-500">Priority uses available invoice and behaviour signals. Monetary priority is unavailable when no native currency threshold is configured.</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex justify-between">
               <span>Recently overdue</span>

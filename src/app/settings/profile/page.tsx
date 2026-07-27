@@ -21,13 +21,6 @@ export default async function ProfileSettingsPage() {
     userEmail: user.email,
     hasActivePaymentMethod: (pmCountResult.count ?? 0) > 0
   });
-  const profileBadges = [
-    profile?.business_name ? { status: "complete", label: "Business identity ready" } : { status: "warning", label: "Missing business name" },
-    profile?.logo_storage_path ? { status: "complete", label: "Logo on file" } : { status: "neutral", label: "Logo optional" },
-    profile?.phone ? { status: "complete", label: "Phone saved" } : { status: "warning", label: "Missing phone" },
-    user.email ? { status: "complete", label: "Email active" } : { status: "warning", label: "Missing email" },
-    { status: "active", label: `${profile?.default_currency || "USD"} default` }
-  ];
   const logoUrl = await signBrandLogoUrl(supabase, profile?.logo_storage_path ?? null);
   const brandColor = sanitizeHexColor(profile?.brand_color ?? undefined, "#116466");
   const brandAccent = profile?.brand_accent ? sanitizeHexColor(profile.brand_accent, brandColor) : null;
@@ -41,21 +34,7 @@ export default async function ProfileSettingsPage() {
         description="Logo, colors, and contact details clients see on payment pages, receipts, portals, and printable invoices."
       />
 
-      <div className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="rounded-3xl border border-slate-200/70 bg-white/75 p-5 shadow-card backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-ink">Profile readiness</p>
-              <p className="mt-1 text-sm text-slate-600">These fields shape the client-facing invoice and receipt identity.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {profileBadges.map((badge) => (
-                <StatusBadge key={badge.label} status={badge.status} label={badge.label} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <OperationsChecklist
+      <OperationsChecklist
           title="Completeness checklist"
           description="Aligned with dashboard profile operations."
           items={[
@@ -107,7 +86,7 @@ export default async function ProfileSettingsPage() {
             }
           ]}
         />
-      </div>
+      
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <form id="profile-form" action={updateProfileAction} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft scroll-mt-24">
