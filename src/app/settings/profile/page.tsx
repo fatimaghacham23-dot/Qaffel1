@@ -86,7 +86,7 @@ export default async function ProfileSettingsPage() {
             }
           ]}
         />
-      
+
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <form id="profile-form" action={updateProfileAction} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft scroll-mt-24">
