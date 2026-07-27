@@ -40,7 +40,7 @@ export const reportDestinations = [
 export const legacyRouteDestinations = {
   "/proofs": "/payments?tab=review",
   "/recoveries": "/payments?tab=recovery",
-  "/connectivity": "/settings/profile#integrations",
+  "/connectivity": "/settings",
   "/finance": "/reports?tab=close",
   "/export": "/reports?tab=exports",
   "/intelligence/deep": "/reports?tab=analysis"

@@ -38,7 +38,7 @@ export default async function ReportsPage() {
             </table>
           )}
         </div>
-        <p className="mt-4 text-center text-xs text-slate-500"><Link href="/settings/integrations" className="font-semibold text-cedar hover:underline">Integrations are in Settings</Link></p>
+        <p className="mt-4 text-center text-xs text-slate-500"><Link href="/settings" className="font-semibold text-cedar hover:underline">Manage available connections in Settings</Link></p>
       </PageContainer>
     </AppShell>
   );
