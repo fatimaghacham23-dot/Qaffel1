@@ -26,8 +26,8 @@ export type CommandSearchResponse = {
   items: CommandItem[];
 };
 
-export const COMMAND_RECENTS_KEY = "qaffel-command-recents-v1";
-export const COMMAND_SEARCHES_KEY = "qaffel-command-searches-v1";
+export const COMMAND_RECENTS_KEY = "qaffel-command-recents-v2";
+export const MAX_COMMAND_RECENTS = 5;
 
 export const staticCommandItems: CommandItem[] = [
   {
@@ -80,6 +80,16 @@ export const staticCommandItems: CommandItem[] = [
     badge: "Recovery",
     group: "Actions",
     keywords: ["overdue", "reminder", "whatsapp", "collect"]
+  },
+  {
+    id: "action:view-overdue",
+    type: "action",
+    title: "View overdue invoices",
+    subtitle: "Open the recovery queue",
+    href: "/recoveries",
+    badge: "Overdue",
+    group: "Actions",
+    keywords: ["overdue", "due", "collections", "recovery"]
   },
   {
     id: "help:shortcuts",
@@ -140,6 +150,51 @@ export const staticCommandItems: CommandItem[] = [
     keywords: ["bills", "quotes", "documents"]
   },
   {
+    id: "nav:payments",
+    type: "navigation",
+    title: "Payments",
+    subtitle: "Proof review, receipts, and payment history",
+    href: "/payments",
+    group: "Navigation",
+    keywords: ["payments", "proofs", "receipts", "manual"]
+  },
+  {
+    id: "nav:notifications",
+    type: "navigation",
+    title: "Notifications",
+    subtitle: "Action items and operational alerts",
+    href: "/notifications",
+    group: "Navigation",
+    keywords: ["alerts", "attention", "tasks"]
+  },
+  {
+    id: "nav:team",
+    type: "navigation",
+    title: "Team",
+    subtitle: "Workspace members and collaboration",
+    href: "/team",
+    group: "Navigation",
+    keywords: ["members", "roles", "people"]
+  },
+  {
+    id: "nav:intelligence",
+    type: "navigation",
+    title: "Intelligence",
+    subtitle: "Explore collection performance",
+    href: "/intelligence/deep",
+    group: "Navigation",
+    keywords: ["analytics", "insights", "performance"]
+  },
+  {
+    id: "nav:operations",
+    type: "navigation",
+    title: "Operations Center",
+    subtitle: "Live operational queues on Dashboard",
+    href: "/dashboard#live-operations",
+    group: "Navigation",
+    keywords: ["operations", "queue", "work"]
+  },
+  {
     id: "nav:proofs",
     type: "navigation",
     title: "Proofs",
@@ -152,7 +207,7 @@ export const staticCommandItems: CommandItem[] = [
   {
     id: "nav:recoveries",
     type: "navigation",
-    title: "Recoveries",
+    title: "Recovery Centre",
     subtitle: "Overdue invoices and reminder workflows",
     href: "/recoveries",
     group: "Navigation",
@@ -303,4 +358,35 @@ export function sortCommandItems(items: CommandItem[], query: string) {
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title))
     .map(({ item }) => item);
+}
+const SAFE_RECENT_HREFS = new Set([
+  "/dashboard",
+  "/dashboard#live-operations",
+  "/invoices",
+  "/invoices/new",
+  "/payments",
+  "/proofs",
+  "/recoveries",
+  "/clients",
+  "/clients/new",
+  "/reports",
+  "/team",
+  "/notifications",
+  "/settings/profile",
+  "/intelligence/deep"
+]);
+
+export function safeRecentDestination(item: CommandItem): CommandItem | null {
+  if (!SAFE_RECENT_HREFS.has(item.href)) return null;
+  return {
+    id: item.id,
+    type: item.type,
+    title: item.title,
+    subtitle: item.subtitle,
+    href: item.href,
+    badge: item.badge,
+    group: item.group,
+    shortcut: item.shortcut,
+    keywords: item.keywords
+  };
 }

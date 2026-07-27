@@ -416,7 +416,7 @@ export default async function InvoiceDetailPage({
   return (
     <AppShell>
       <PageContainer width="wide">
-      <PageHeader backHref="/invoices" eyebrow={nounTitle} title={invoice.invoice_number ? `${invoice.invoice_number} - ${invoice.title}` : invoice.title} badge={<div className="flex flex-wrap items-center gap-2"><StatusBadge status={displayStatus} label={friendlyLifecycle} /><StatusBadge status={isQuote ? "quote" : "active"} label={nounTitle} /></div>} />
+      <PageHeader backHref="/invoices" breadcrumbs={[{ label: "Invoices", href: "/invoices" }, { label: nounTitle }]} eyebrow={nounTitle} title={invoice.invoice_number ? `${invoice.invoice_number} - ${invoice.title}` : invoice.title} badge={<div className="flex flex-wrap items-center gap-2"><StatusBadge status={displayStatus} label={friendlyLifecycle} /><StatusBadge status={isQuote ? "quote" : "active"} label={nounTitle} /></div>} />
       <div className="mb-6">
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
           <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:p-6">

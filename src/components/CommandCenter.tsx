@@ -26,7 +26,8 @@ import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useStat
 import { toast } from "sonner";
 import {
   COMMAND_RECENTS_KEY,
-  COMMAND_SEARCHES_KEY,
+  MAX_COMMAND_RECENTS,
+  safeRecentDestination,
   type CommandItem,
   type CommandItemType,
   type CommandSearchResponse,
@@ -34,6 +35,7 @@ import {
   staticCommandItems
 } from "@/lib/command-center";
 import { cn } from "@/lib/utils";
+import { startRouteTransition } from "@/components/RouteTransitionIndicator";
 
 type CommandCenterProps = {
   enabled?: boolean;
@@ -48,9 +50,6 @@ type CommandEntry = {
   section: string;
   item: CommandItem;
 };
-
-const MAX_RECENTS = 8;
-const MAX_SEARCHES = 6;
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -68,18 +67,9 @@ function readStoredItems(key: string): CommandItem[] {
 
     return parsed
       .filter((item): item is CommandItem => Boolean(item?.id && item?.title && item?.href && item?.type))
-      .slice(0, MAX_RECENTS);
-  } catch {
-    return [];
-  }
-}
-
-function readStoredSearches() {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(COMMAND_SEARCHES_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").slice(0, MAX_SEARCHES) : [];
+      .map(safeRecentDestination)
+      .filter((item): item is CommandItem => item !== null)
+      .slice(0, MAX_COMMAND_RECENTS);
   } catch {
     return [];
   }
@@ -87,17 +77,9 @@ function readStoredSearches() {
 
 function saveStoredItems(items: CommandItem[]) {
   try {
-    window.localStorage.setItem(COMMAND_RECENTS_KEY, JSON.stringify(items.slice(0, MAX_RECENTS)));
+    window.localStorage.setItem(COMMAND_RECENTS_KEY, JSON.stringify(items.slice(0, MAX_COMMAND_RECENTS)));
   } catch {
     // Recents are supportive only; private-mode storage should not break navigation.
-  }
-}
-
-function saveStoredSearches(items: string[]) {
-  try {
-    window.localStorage.setItem(COMMAND_SEARCHES_KEY, JSON.stringify(items.slice(0, MAX_SEARCHES)));
-  } catch {
-    // Search history is optional.
   }
 }
 
@@ -241,19 +223,25 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [recents, setRecents] = useState<CommandItem[]>([]);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const chordRef = useRef<{ key: string; at: number } | null>(null);
 
   const disabledRoute = /^\/(pay|receipt|client)(\/|$)/.test(pathname || "") || pathname === "/" || pathname === "/login" || pathname.startsWith("/auth");
   const active = enabled && !disabledRoute;
   const trimmedQuery = query.trim();
 
+  const openPalette = () => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : triggerRef.current;
+    setSelectedIndex(0);
+    setOpen(true);
+  };
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setRecents(readStoredItems(COMMAND_RECENTS_KEY));
-      setRecentSearches(readStoredSearches());
     }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
@@ -307,11 +295,13 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
     }
 
     const topActions = staticCommandItems.filter((item) => item.group === "Actions").slice(0, 6);
-    const navigation = staticCommandItems.filter((item) => item.group === "Navigation").slice(0, 6);
+    const navigation = staticCommandItems.filter((item) => item.group === "Navigation").slice(0, 12);
+    const settings = staticCommandItems.filter((item) => item.group === "Settings").slice(0, 6);
     return [
-      { title: "Recent", items: recents },
-      { title: "Actions", items: topActions },
-      { title: "Navigation", items: navigation }
+      { title: "Recent destinations", items: recents },
+      { title: "Quick actions", items: topActions },
+      { title: "Navigation", items: navigation },
+      { title: "Settings", items: settings }
     ].filter((section) => section.items.length > 0);
   }, [recents, remoteItems, trimmedQuery]);
 
@@ -327,18 +317,12 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
   }, [open, safeSelectedIndex]);
 
   const rememberItem = (item: CommandItem) => {
-    const next = [item, ...recents.filter((recent) => recent.id !== item.id)].slice(0, MAX_RECENTS);
+    const safeItem = safeRecentDestination(item);
+    if (!safeItem) return;
+
+    const next = [safeItem, ...recents.filter((recent) => recent.id !== safeItem.id)].slice(0, MAX_COMMAND_RECENTS);
     setRecents(next);
     saveStoredItems(next);
-
-    if (trimmedQuery) {
-      const nextSearches = [trimmedQuery, ...recentSearches.filter((recent) => recent.toLowerCase() !== trimmedQuery.toLowerCase())].slice(
-        0,
-        MAX_SEARCHES
-      );
-      setRecentSearches(nextSearches);
-      saveStoredSearches(nextSearches);
-    }
   };
 
   const runItem = (item: CommandItem) => {
@@ -354,6 +338,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
     setRemoteItems([]);
     setRemoteLoading(false);
     setSelectedIndex(0);
+    startRouteTransition();
     router.push(item.href);
   };
 
@@ -363,6 +348,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
     setRemoteItems([]);
     setRemoteLoading(false);
     setSelectedIndex(0);
+    window.setTimeout(() => (previousFocusRef.current || triggerRef.current)?.focus(), 0);
   };
 
   const handleQueryChange = (value: string) => {
@@ -378,6 +364,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
     if (!active) return;
 
     const go = (href: string) => {
+      startRouteTransition();
       router.push(href);
       toast.message("Jumped", { description: href.replace("/", "") || "dashboard" });
     };
@@ -390,8 +377,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
         if (open) {
           closePalette();
         } else {
-          setSelectedIndex(0);
-          setOpen(true);
+          openPalette();
         }
         return;
       }
@@ -409,8 +395,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
       const key = event.key.toLowerCase();
       if (key === "/") {
         event.preventDefault();
-        setSelectedIndex(0);
-        setOpen(true);
+        openPalette();
         return;
       }
 
@@ -450,7 +435,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, helpOpen, open, router, pathname, recentSearches, recents, trimmedQuery]);
+  }, [active, helpOpen, open, router, pathname]);
 
   const handlePaletteKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowDown") {
@@ -502,14 +487,12 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
   return (
     <>
       <button
+        ref={triggerRef}
         aria-keyshortcuts="Control+K Meta+K"
         aria-label="Open command center"
         className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] right-4 z-50 inline-flex h-11 items-center gap-2 rounded-full border border-white/70 bg-white/90 px-3 text-sm font-semibold text-ink backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cedar/20 hover:text-cedar focus:outline-none focus:ring-2 focus:ring-cedar/30 sm:bottom-5 sm:px-4 print:hidden"
         style={{ boxShadow: "var(--q-shadow-float)", transitionDuration: "var(--q-duration-normal)", transitionTimingFunction: "var(--q-ease)" }}
-        onClick={() => {
-          setSelectedIndex(0);
-          setOpen(true);
-        }}
+        onClick={openPalette}
         type="button"
       >
         <Command className="h-4 w-4" aria-hidden="true" />
@@ -593,6 +576,7 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                           {section.items.map((item) => {
                             const absoluteIndex = entries.findIndex((entry) => entry.item.id === item.id && entry.section === section.title);
                             const selected = absoluteIndex === safeSelectedIndex;
+                            const currentPage = item.href.split(/[?#]/)[0] === pathname;
                             const Icon = itemIcon(item.type, item.id);
 
                             return (
@@ -636,14 +620,14 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                                 </span>
                                 <span className="flex shrink-0 items-center gap-2">
                                   {item.shortcut ? <Kbd>{item.shortcut}</Kbd> : null}
-                                  {item.badge ? (
+                                  {currentPage || item.badge ? (
                                     <span
                                       className={cn(
                                         "hidden rounded-full px-2 py-1 text-[11px] font-bold sm:inline-flex",
                                         selected ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
                                       )}
                                     >
-                                      {item.badge}
+                                      {currentPage ? "Current page" : item.badge}
                                     </span>
                                   ) : null}
                                   <ArrowRight className={cn("h-4 w-4", selected ? "text-white" : "text-slate-300")} aria-hidden="true" />
@@ -682,26 +666,10 @@ export function CommandCenter({ enabled = true }: CommandCenterProps) {
                     <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                     {remoteLoading ? "Searching workspace..." : "Arrow keys to move, Enter to open"}
                   </span>
-                  {recentSearches.length > 0 && !trimmedQuery ? (
-                    <span className="hidden items-center gap-1.5 sm:flex">
-                      Recent:
-                      {recentSearches.slice(0, 3).map((search) => (
-                        <button
-                          key={search}
-                          className="rounded-full bg-white px-2 py-1 text-slate-500 transition hover:text-cedar"
-                          onClick={() => handleQueryChange(search)}
-                          type="button"
-                        >
-                          {search}
-                        </button>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <Kbd>?</Kbd>
-                      shortcuts
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1.5">
+                    <Kbd>Esc</Kbd>
+                    Close
+                  </span>
                 </div>
               </div>
             </motion.div>

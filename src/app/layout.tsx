@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { CommandCenter } from "@/components/CommandCenter";
+import { RouteTransitionIndicator } from "@/components/RouteTransitionIndicator";
 import { createClient } from "@/lib/supabase/server";
 import { getCanonicalAppUrl } from "@/lib/urls";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -40,6 +41,7 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-[100dvh] bg-[var(--q-bg)] text-ink antialiased">
+        <RouteTransitionIndicator />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-ink focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-cedar focus:ring-offset-2"

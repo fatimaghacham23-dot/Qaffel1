@@ -29,6 +29,7 @@ export default async function PaymentMethodsPage() {
       <PageContainer width="default">
       <PageHeader
         title="Payment methods"
+        breadcrumbs={[{ label: "Settings" }, { label: "Payment methods" }]}
         description="Manage how clients can pay you on public invoice pages."
         actions={<a className="btn btn-primary" href="#payment-methods">Manage methods</a>}
       />

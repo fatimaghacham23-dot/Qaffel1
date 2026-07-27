@@ -22,6 +22,7 @@ export default async function ServicePresetsPage() {
       <PageContainer width="default">
       <PageHeader
         title="Service presets"
+        breadcrumbs={[{ label: "Settings" }, { label: "Service presets" }]}
         description="Create reusable invoice templates for services you invoice frequently."
         actions={<a className="btn btn-primary" href="#new-preset">New preset</a>}
       />

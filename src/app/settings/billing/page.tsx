@@ -225,6 +225,7 @@ export default async function BillingSettingsPage() {
       <PageContainer width="default">
       <PageHeader
         title="Workspace billing"
+        breadcrumbs={[{ label: "Settings" }, { label: "Workspace billing" }]}
         description="Subscription state, billing authority, seats, and operational continuity for this workspace."
       />
 

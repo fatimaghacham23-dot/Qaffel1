@@ -1,3 +1,5 @@
-export default function DashboardLoading() {
-  return <main className="mx-auto max-w-[1480px] animate-pulse" aria-label="Loading dashboard"><div className="h-4 w-20 rounded bg-slate-200" /><div className="mt-4 h-10 w-80 max-w-full rounded bg-slate-200" /><div className="mt-3 h-5 w-96 max-w-full rounded bg-slate-100" /><div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-32 rounded-2xl bg-white shadow-card" />)}</div><div className="mt-7 grid gap-7 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]"><div className="h-80 rounded-3xl bg-slate-200" /><div className="h-80 rounded-3xl bg-white shadow-card" /></div></main>;
+import { AuthenticatedRouteLoading } from "@/components/AuthenticatedRouteLoading";
+
+export default function Loading() {
+  return <AuthenticatedRouteLoading rows={5} />;
 }

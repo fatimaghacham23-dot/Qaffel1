@@ -31,6 +31,7 @@ export default async function ProfileSettingsPage() {
       <PageContainer width="default" className="max-w-[90rem] space-y-8">
       <PageHeader
         title="Business profile"
+        breadcrumbs={[{ label: "Settings" }, { label: "Business profile" }]}
         description="Logo, colors, and contact details clients see on payment pages, receipts, portals, and printable invoices."
       />
 

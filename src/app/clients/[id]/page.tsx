@@ -283,7 +283,7 @@ export default async function ClientDetailPage({
   return (
     <AppShell>
       <PageContainer width="wide">
-        <PageHeader title={client.name || "Client"} eyebrow="Client profile" backHref="/clients" />
+        <PageHeader title={client.name || "Client"} eyebrow="Client profile" backHref="/clients" breadcrumbs={[{ label: "Clients", href: "/clients" }, { label: "Client details" }]} />
       <div className="mb-6 grid gap-4 print:hidden">
         <div
           className={`rounded-2xl border p-4 shadow-card ${
