@@ -28,7 +28,7 @@ export default async function ProfileSettingsPage() {
 
   return (
     <AppShell>
-      <PageContainer width="default">
+      <PageContainer width="default" className="max-w-[90rem] space-y-8">
       <PageHeader
         title="Business profile"
         description="Logo, colors, and contact details clients see on payment pages, receipts, portals, and printable invoices."
@@ -88,7 +88,7 @@ export default async function ProfileSettingsPage() {
         />
 
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
         <form id="profile-form" action={updateProfileAction} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft scroll-mt-24">
           <div className="grid gap-6 p-6">
             <section className="grid gap-4">
