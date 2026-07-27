@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deriveOnboardingEvidence } from "@/lib/onboarding-evidence";
+import { deriveOnboardingEvidence, ONBOARDING_INVOICE_FACTS_SELECT, onboardingQueryResultOrThrow } from "@/lib/onboarding-evidence";
 const base = () => ({ clientCount: 0, realInvoiceCount: 0, businessName: "", phone: "", supportEmail: "", hasVisualBranding: false, activePaymentMethodCount: 0, validPaymentTokenCount: 0, shareEventCount: 0, additionalMemberCount: 0, pendingInvitationCount: 0 });
 describe("onboarding evidence", () => {
  it("uses workspace-scoped aggregate facts and keeps logo optional", () => { const e=deriveOnboardingEvidence({...base(),clientCount:1,realInvoiceCount:1,businessName:"Q",phone:"1",activePaymentMethodCount:1,validPaymentTokenCount:1}); expect(e).toMatchObject({hasClient:true,hasInvoice:true,hasCompleteBusinessIdentity:true,hasVisualBranding:false,hasActivePaymentMethod:true,hasSharedPaymentRequest:true}); expect(JSON.stringify(e)).not.toContain("token"); });
  it("excludes quotes or foreign/null facts by requiring caller scoped real counts",()=>{ expect(deriveOnboardingEvidence(base()).hasInvoice).toBe(false); expect(deriveOnboardingEvidence({...base(),realInvoiceCount:1}).hasInvoice).toBe(true); });
  it("requires identity contact but does not duplicate branding",()=>{ const e=deriveOnboardingEvidence({...base(),businessName:"Q",hasVisualBranding:true}); expect(e.missingBusinessIdentityFields).toEqual(["support_contact"]); expect(e.hasCompleteBusinessIdentity).toBe(false); });
  it("accepts authoritative share events and models optional team and billing",()=>{ const e=deriveOnboardingEvidence({...base(),shareEventCount:1}); expect(e.hasSharedPaymentRequest).toBe(true); expect(e.requiresTeamSetup).toBe(false); expect(e.requiresBillingSetup).toBe(false); });
+ it("queries only invoice columns present in the repository schema",()=>{ expect(ONBOARDING_INVOICE_FACTS_SELECT).not.toContain("revoked_at"); expect(ONBOARDING_INVOICE_FACTS_SELECT).toContain("workspace_id"); expect(ONBOARDING_INVOICE_FACTS_SELECT).toContain("clients(workspace_id)"); });
+ it("propagates a Supabase query error instead of deriving an empty onboarding state",()=>{ const error={code:"42703",message:"column does not exist"}; expect(()=>onboardingQueryResultOrThrow({error})).toThrow(error); });
 });

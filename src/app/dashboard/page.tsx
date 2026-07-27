@@ -1,5 +1,4 @@
 import { AppShell } from "@/components/AppShell";
-import { PreviewRenderDiagnosticCard } from "@/components/PreviewRenderDiagnosticCard";
 import { DashboardHome } from "@/components/DashboardHome";
 import { PageContainer } from "@/components/layout/PageContainer";
 import {
@@ -26,7 +25,6 @@ import { notificationPreview } from "@/lib/notifications";
 import { getWorkspaceNotifications } from "@/lib/notifications-server";
 import { getWorkspaceOnboardingEvidence } from "@/lib/onboarding-evidence";
 import { getWorkspaceRecentActivity } from "@/lib/recent-activity-server";
-import { createPreviewDiagnosticTracker, previewRenderDiagnostic, throwInvalidFacts, throwSupabaseQueryFailure, type PreviewDiagnosticTracker, type PreviewRenderDiagnostic } from "@/lib/preview-render-diagnostics";
 import { requireUser } from "@/lib/supabase/server";
 
 type Result<T> = { data: T[] | null; error: { message?: string } | null; count?: number | null };
@@ -90,9 +88,8 @@ function cashFlowPreview(input: { invoices: DashboardInvoice[]; payments: Dashbo
   return { currency, points };
 }
 
-async function loadDashboardPageData(tracker: PreviewDiagnosticTracker) {
+export default async function DashboardPage() {
   const { supabase } = await requireUser();
-  tracker.set("DASHBOARD_WORKSPACE");
   const ctx = await getWorkspaceContext();
   const scope = dashboardScope(ctx.workspaceId);
   const now = new Date();
@@ -156,31 +153,20 @@ async function loadDashboardPageData(tracker: PreviewDiagnosticTracker) {
         .order("due_at", { ascending: true, nullsFirst: false })
         .limit(DASHBOARD_ASSIGNMENT_LIMIT)
     : emptyResult<DashboardAssignment>();
-  tracker.set("DASHBOARD_ONBOARDING");
-  const onboardingEvidencePromise = getWorkspaceOnboardingEvidence(supabase, ctx, tracker);
-  tracker.set("DASHBOARD_FINANCIAL_FACTS");
-  const [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult] = await Promise.all([
-    invoicePromise, pendingPromise, pendingCountPromise, acceptedPromise, rejectedPromise, assignmentQuery
-  ]) as unknown as [Result<DashboardInvoice>, Result<DashboardPayment>, Result<never>, Result<DashboardPayment>, Result<DashboardPayment>, Result<DashboardAssignment>];
+  const onboardingEvidencePromise = getWorkspaceOnboardingEvidence(supabase, ctx);
+  const [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult, eventResult] = await Promise.all([
+    invoicePromise, pendingPromise, pendingCountPromise, acceptedPromise, rejectedPromise, assignmentQuery, getWorkspaceRecentActivity(supabase, ctx, 5)
+  ]) as unknown as [Result<DashboardInvoice>, Result<DashboardPayment>, Result<never>, Result<DashboardPayment>, Result<DashboardPayment>, Result<DashboardAssignment>, Awaited<ReturnType<typeof getWorkspaceRecentActivity>>];
 
-  for (const result of [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult]) {
-    if (result.error) throwSupabaseQueryFailure(tracker, "DASHBOARD_FINANCIAL_FACTS", result.error);
-  }
-  if (!invoiceResult.data || !pendingResult.data || !acceptedResult.data || !rejectedResult.data || !assignmentResult.data) {
-    throwInvalidFacts(tracker, "CANONICAL_INVOICE_LOADING", "CANONICAL_INVOICE_FACTS_INVALID", "Expected dashboard facts were unavailable.");
-  }
-  const invoices = filterCanonicalWorkspaceInvoices(invoiceResult.data, ctx.workspaceId);
-  const pending = pendingResult.data;
-  const payments = [...pending, ...acceptedResult.data, ...rejectedResult.data];
-  const metrics = dashboardMetrics({ invoices, payments: acceptedResult.data, now });
-  tracker.set("DASHBOARD_ONBOARDING");
+  const invoices = filterCanonicalWorkspaceInvoices(invoiceResult.data || [], ctx.workspaceId);
+  const pending = pendingResult.data || [];
+  const payments = [...pending, ...(acceptedResult.data || []), ...(rejectedResult.data || [])];
+  const metrics = dashboardMetrics({ invoices, payments: acceptedResult.data || [], now });
   const onboardingEvidence = await onboardingEvidencePromise;
-  const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx, onboardingEvidence, tracker)).actionItems;
-  tracker.set("DASHBOARD_RECENT_ACTIVITY");
-  const recentActivity = await getWorkspaceRecentActivity(supabase, ctx, 5, tracker);
+  const attention = notificationPreview(await getWorkspaceNotifications(supabase, ctx, onboardingEvidence)).actionItems;
+  const recentActivity = eventResult;
   const onboardingState = deriveDashboardOnboardingState({ onboardingEvidence, role: ctx.role, operationalAttention: attention.map((item) => ({ id: item.id, title: item.title, href: item.destinationUrl, label: item.actionLabel || "Open" })) });
-  const cashFlow = cashFlowPreview({ invoices, payments: acceptedResult.data, now });
-  tracker.set("DASHBOARD_PRESENTATION");
+  const cashFlow = cashFlowPreview({ invoices, payments: acceptedResult.data || [], now });
   const collectedLabel = groupedMoney(metrics.collected);
   const actionCount = Math.max(attention.length, pendingCountResult.count || 0);
   const summary = capabilities.showFinancialSummary
@@ -190,22 +176,6 @@ async function loadDashboardPageData(tracker: PreviewDiagnosticTracker) {
       : "Here are the latest workspace updates available to you.";
   const partialData = [invoiceResult, pendingResult, pendingCountResult, acceptedResult, rejectedResult, assignmentResult].some((result) => Boolean(result.error)) || (invoiceResult.count || 0) > DASHBOARD_INVOICE_LIMIT || (acceptedResult.count || 0) > DASHBOARD_INVOICE_LIMIT;
 
-  return { ctx, now, capabilities, metrics, attention, recentActivity, onboardingState, cashFlow, partialData, summary };
-}
-
-export default async function DashboardPage() {
-  const tracker = createPreviewDiagnosticTracker("DASHBOARD_AUTH");
-  let loaded: Awaited<ReturnType<typeof loadDashboardPageData>> | null = null;
-  let diagnostic: PreviewRenderDiagnostic | null = null;
-  try {
-    loaded = await loadDashboardPageData(tracker);
-  } catch (error) {
-    diagnostic = previewRenderDiagnostic({ environment: process.env.VERCEL_ENV, routePattern: "/dashboard", tracker, error });
-    if (!diagnostic) throw error;
-  }
-  if (diagnostic) return <PreviewRenderDiagnosticCard diagnostic={diagnostic} />;
-  if (!loaded) throw new Error("Dashboard data was unavailable.");
-  const { ctx, now, capabilities, metrics, attention, recentActivity, onboardingState, cashFlow, partialData, summary } = loaded;
   return (
     <AppShell role={ctx.role}>
       <PageContainer width="wide">
